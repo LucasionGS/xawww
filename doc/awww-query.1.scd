@@ -11,6 +11,9 @@ awww-query
 *-a*,*--all*
 	Send this command to all active *awww-daemon* namespaces.
 
+*-j*,*--j*
+	Print the information in *json* format.
+
 *-n*,*--namespace* <namespace>
 	Which wayland namespace to send this command to.
 

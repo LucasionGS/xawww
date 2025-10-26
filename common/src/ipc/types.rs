@@ -176,6 +176,14 @@ impl Scale {
             }
         }
     }
+
+    #[must_use]
+    pub fn to_f32(&self) -> f32 {
+        match self {
+            Scale::Output(i) | Scale::Preferred(i) => i.get() as f32,
+            Scale::Fractional(f) => f.get() as f32 / 120.0,
+        }
+    }
 }
 
 impl PartialEq for Scale {
@@ -192,14 +200,7 @@ impl PartialEq for Scale {
 
 impl fmt::Display for Scale {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Scale::Output(i) | Scale::Preferred(i) => i.get() as f32,
-                Scale::Fractional(f) => f.get() as f32 / 120.0,
-            }
-        )
+        write!(f, "{}", self.to_f32())
     }
 }
 
