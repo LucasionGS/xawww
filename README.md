@@ -1,4 +1,4 @@
-# A Solution to your Wayland Wallpaper Woes
+# An Answer to your Wayland Wallpaper Woes
 ### Efficient animated wallpaper daemon for wayland, controlled at runtime
 
 ![animated gif demonstration](https://i.imgur.com/Leuh6wm.gif)
