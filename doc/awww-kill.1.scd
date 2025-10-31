@@ -1,25 +1,25 @@
-swww-kill(1)
+awww-kill(1)
 
 # NAME
-swww-kill
+awww-kill
 
 # SYNOPSIS
-*swww kill*
+*awww kill*
 
 # OPTIONS
 
 *-a*,*--all*
-	Send this command to all active *swww-daemon* namespaces.
+	Send this command to all active *awww-daemon* namespaces.
 
 *-n*,*--namespace* <namespace>
 	Which wayland namespace to send this command to.
 
 	You can specify this option multiple times to send commands to multiple
-	namespaces at once: *swww kill -n <namespace1> -n <namespace 2>*.
+	namespaces at once: *awww kill -n <namespace1> -n <namespace 2>*.
 
-	This affects the name of the *swww-daemon* socket we will use to
+	This affects the name of the *awww-daemon* socket we will use to
 	communicate with. Specifically, our socket name is
-	_${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket_.
+	_${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket_.
 
 	Some compositors can have several different wallpapers per output. This
 	allows you to differentiate between them. Most users will probably not have
@@ -39,4 +39,4 @@ problem; it would only cause a warning to be printed next time the daemon is
 initialized.
 
 # SEE ALSO
-*swww-daemon*(1)
+*awww-daemon*(1)

@@ -118,6 +118,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "awww"
+version = "0.11.2-master2"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "common",
+ "fast_image_resize",
+ "fastrand",
+ "image",
+ "resvg",
+ "rustix",
+]
+
+[[package]]
+name = "awww-daemon"
+version = "0.11.2-master2"
+dependencies = [
+ "common",
+ "keyframe",
+ "libc",
+ "log",
+ "rustix",
+ "sd-notify",
+ "smallvec",
+ "waybackend",
+ "waybackend-scanner",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1091,35 +1120,6 @@ checksum = "68c7541fff44b35860c1a7a47a7cadf3e4a304c457b58f9870d9706ece028afc"
 dependencies = [
  "kurbo",
  "siphasher",
-]
-
-[[package]]
-name = "swww"
-version = "0.11.2-master2"
-dependencies = [
- "clap",
- "clap_complete",
- "common",
- "fast_image_resize",
- "fastrand",
- "image",
- "resvg",
- "rustix",
-]
-
-[[package]]
-name = "swww-daemon"
-version = "0.11.2-master2"
-dependencies = [
- "common",
- "keyframe",
- "libc",
- "log",
- "rustix",
- "sd-notify",
- "smallvec",
- "waybackend",
- "waybackend-scanner",
 ]
 
 [[package]]

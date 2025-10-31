@@ -1,17 +1,17 @@
-swww-daemon(1)
+awww-daemon(1)
 
 # NAME
-swww-daemon
+awww-daemon
 
 # SYNOPSIS
-swww-daemon [OPTIONS]
+awww-daemon [OPTIONS]
 
 # OPTIONS
 
 *-f*,*--format* <argb|abgr|rgb|bgr>
 	Force the daemon to use a specific wl_shm format.
 
-	By default, swww-daemon will use argb, because it is most widely
+	By default, awww-daemon will use argb, because it is most widely
 	supported. Generally speaking, formats with 3 channels will use 3/4 the
 	memory of formats with 4 channels. Also, bgr formats are more efficient
 	than rgb formats because we do not need to do an extra swap of the bytes
@@ -25,12 +25,12 @@ swww-daemon [OPTIONS]
 	there is ever a use case for these, we can reconsider it.
 
 *-n*,*--namespace* <namespace>
-	Which wayland namespace to append to *swww-daemon*.
+	Which wayland namespace to append to *awww-daemon*.
 
-	The result namespace will the *swww-daemon<specified namespace>*. This also
-	affects the name of the *swww-daemon* socket we will use to communicate
+	The result namespace will the *awww-daemon<specified namespace>*. This also
+	affects the name of the *awww-daemon* socket we will use to communicate
 	with the *client*. Specifically, our socket name is
-	_${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket_.
+	_${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket_.
 
 	Some compositors can have several different wallpapers per output. This
 	allows you to differentiate between them. Most users will probably not have
@@ -38,8 +38,8 @@ swww-daemon [OPTIONS]
 
 *--no-cache*
 	Don't search the cache for the last wallpaper for each output.
-	Useful if you always want to select which image 'swww' loads manually using
-	'swww img'
+	Useful if you always want to select which image 'awww' loads manually using
+	'awww img'
 
 *-q*,*--quiet*
 	Makes the daemon only log errors.
@@ -52,11 +52,11 @@ swww-daemon [OPTIONS]
 
 # DESCRIPTION
 
-The *swww-daemon* will run continuously, waiting for commands in
-_${XDG_RUNTIME_DIR}/swww-${WAYLAND_DISPLAY}.socket_ (or
-_/tmp/swww/swww-${WAYLAND_DISPLAY}.socket_, if $XDG_RUNTIME_DIR is not set). The
+The *awww-daemon* will run continuously, waiting for commands in
+_${XDG_RUNTIME_DIR}/awww-${WAYLAND_DISPLAY}.socket_ (or
+_/tmp/awww/awww-${WAYLAND_DISPLAY}.socket_, if $XDG_RUNTIME_DIR is not set). The
 daemon will take care of both creating and deleting that file when it is
 initialized or killed.
 
 # SEE ALSO
-*swww*(1)
+*awww*(1)

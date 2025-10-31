@@ -116,7 +116,7 @@ impl Wallpaper {
             wl_surface,
             Some(output),
             *layer,
-            &format!("swww-daemon{}", daemon.namespace),
+            &format!("awww-daemon{}", daemon.namespace),
         )
         .unwrap();
 
@@ -290,7 +290,7 @@ impl Wallpaper {
                         // Note: we do not need to wait for this command because we set SIGCHLD to
                         // SIG_IGN, and posix says that does not generate a zombie process (see
                         // `man 3p _EXIT`
-                        let ret = std::process::Command::new("swww")
+                        let ret = std::process::Command::new("awww")
                             .arg("img")
                             .args([
                                 "--outputs",
@@ -307,7 +307,7 @@ impl Wallpaper {
                             ])
                             .spawn();
                         if let Err(e) = ret {
-                            error!("failed to spawn child swww process to load the cache: {e}");
+                            error!("failed to spawn child awww process to load the cache: {e}");
                         }
                     }
                     Ok(None) => break 'brk,

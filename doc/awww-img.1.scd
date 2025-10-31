@@ -1,15 +1,15 @@
-swww-img(1)
+awww-img(1)
 
 # NAME
-swww-img
+awww-img
 
 # SYNOPSIS
-*swww img* [OPTIONS] <path/to/img>
+*awww img* [OPTIONS] <path/to/img>
 
 # OPTIONS
 
 *-a*,*--all*
-	Send this command to all active *swww-daemon* namespaces.
+	Send this command to all active *awww-daemon* namespaces.
 
 *-f*, *--filter* <FILTER>
 	Filter to use when scaling images
@@ -36,11 +36,11 @@ swww-img
 	Which wayland namespace to send this command to.
 
 	You can specify this option multiple times to send commands to multiple
-	namespaces at once: *swww img -n <namespace1> -n <namespace 2>*.
+	namespaces at once: *awww img -n <namespace1> -n <namespace 2>*.
 
-	This affects the name of the *swww-daemon* socket we will use to
+	This affects the name of the *awww-daemon* socket we will use to
 	communicate with. Specifically, our socket name is
-	_${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket_.
+	_${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket_.
 
 	Some compositors can have several different wallpapers per output. This
 	allows you to differentiate between them. Most users will probably not have
@@ -70,13 +70,13 @@ swww-img
 	Default is _000000_.
 
 *-o*, *--outputs*
-	Comma separated list of outputs to display the image at. Use *swww query* to
+	Comma separated list of outputs to display the image at. Use *awww query* to
 	know which outputs are currently being used.
 
 	If it isn't set, the image is displayed on all outputs.
 
 *-t*, *--transition-type* <TRANSITION_TYPE>
-	\[Environment Variable $SWWW_TRANSITION]
+	\[Environment Variable $AWWW_TRANSITION]
 
 	Sets the type of transition. Default is _simple_, that fades into the new
 	image.
@@ -124,7 +124,7 @@ swww-img
 	Finally, _random_ will select a transition effect at random
 
 *--transition-step* <0-255>
-	\[Environment Variable $SWWW_TRANSITION_STEP]
+	\[Environment Variable $AWWW_TRANSITION_STEP]
 
 	How fast the transition approaches the new image.
 
@@ -143,7 +143,7 @@ swww-img
 	If *transition-type* is _simple_, default is 2.
 
 *--transition-duration* <seconds (can have decimals)>
-	\[Environment Variable $SWWW_TRANSITION_DURATION]
+	\[Environment Variable $AWWW_TRANSITION_DURATION]
 
 	How long the transition takes to complete, in seconds.
 
@@ -152,7 +152,7 @@ swww-img
 	Default is 3.
 
 *--transition-fps* <frames per second (max 255)>
-	\[Environment Variable: $SWWW_TRANSITION_FPS]
+	\[Environment Variable: $AWWW_TRANSITION_FPS]
 
 	Frame rate for the transition effect.
 
@@ -165,7 +165,7 @@ swww-img
 	Default is 30.
 
 *--transition-angle* <angle, in degrees (parsed as a float)>
-	\[Environment Variable: SWWW_TRANSITION_ANGLE]
+	\[Environment Variable: AWWW_TRANSITION_ANGLE]
 
 	This is used for the _wipe_ and _wave_ transitions. It controls the angle of
 	the wipe.
@@ -176,7 +176,7 @@ swww-img
 	Default is 45.
 
 *--transition-pos* <x,y>
-	\[Environment Variable: SWWW_TRANSITION_POS]
+	\[Environment Variable: AWWW_TRANSITION_POS]
 
 	This is only used for the _grow_ and _outer_ transitions. It controls the
 	center of circle (default is _center_).
@@ -201,12 +201,12 @@ swww-img
 	Default is _center_.
 
 *--invert-y* <bool>
-	\[Environment Variable: SWWW_INVERT_Y]
+	\[Environment Variable: AWWW_INVERT_Y]
 
 	inverts the y position sent in *transition_pos* flag
 
 *--transition-bezier* <f1,f2,f3,f4 (all floats)>
-	\[Environment Variable: SWWW_TRANSITION_BEZIER]
+	\[Environment Variable: AWWW_TRANSITION_BEZIER]
 
 	Bezier curve to use for the transition animation. https://cubic-bezier.com
 	is a good website to get these values from.
@@ -216,7 +216,7 @@ swww-img
 	Default is .54,0,.34,.99
 
 *--transition-wave* <width,height (both floats)>
-	\[Environment Variable: SWWW_TRANSITION_WAVE]
+	\[Environment Variable: AWWW_TRANSITION_WAVE]
 
 	Currently only used for _wave_ transition to control the width and height of
 	each wave.
@@ -232,16 +232,16 @@ to read from stdin instead.
 
 # ABOUT THE CACHE
 
-The images sent will be cached at _$XDG_CACHE_HOME/swww_ or _$HOME/.cache/swww_
+The images sent will be cached at _$XDG_CACHE_HOME/awww_ or _$HOME/.cache/awww_
 if $XDG_CACHE_HOME does not exist. In this directory, we create another
-directory corresponding to *swww*s current version number. In there, we have
+directory corresponding to *awww*s current version number. In there, we have
 files that cache the last displayed image and animation frames for animated
 wallpapers. There is one file per output.
 
 As mentioned, the cache will keep preprocessed versions of animations. So, if
 you load a large *gif*, you would only have to pay the price for its processing
 the first time. If you constantly load large *gif*s, this could cause the cache
-to get very big. You can simply run *swww clean-cache* if this happens.
+to get very big. You can simply run *awww clean-cache* if this happens.
 
 # SEE ALSO
-*swww-clear-cache*(1) *swww-daemon*(1) *swww-query*(1)
+*awww-clear-cache*(1) *awww-daemon*(1) *awww-query*(1)

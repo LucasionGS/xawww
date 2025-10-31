@@ -74,7 +74,7 @@ impl std::str::FromStr for Filter {
             "Lanczos3" => Ok(Self::Lanczos3),
             _ => Err("unrecognized filter. Valid filters are:\n\
                      \tNearest | Bilinear | CatmullRom | Mitchell | Lanczos3\n\
-                     see swww img --help for more details"),
+                     see awww img --help for more details"),
         }
     }
 }
@@ -118,7 +118,7 @@ impl std::str::FromStr for TransitionType {
             "fade" => Ok(Self::Fade),
             _ => Err("unrecognized transition type.\nValid transitions are:\n\
                      \tsimple | fade | left | right | top | bottom | wipe | grow | center | outer | random | wave\n\
-                     see swww img --help for more details"),
+                     see awww img --help for more details"),
         }
     }
 }
@@ -151,16 +151,16 @@ pub enum CliImage {
 }
 
 #[derive(Parser)]
-#[command(version, name = "swww")]
+#[command(version, name = "awww")]
 ///A Solution to your Wayland Wallpaper Woes
 ///
-///Change what your monitors display as a background by controlling the swww daemon at runtime.
+///Change what your monitors display as a background by controlling the awww daemon at runtime.
 ///Supports animated gifs and putting different stuff in different monitors. I also did my best to
 ///make it as resource efficient as possible.
 ///
-///Note `swww` will only work in a compositor that implements the layer-shell protocol. Typically,
+///Note `awww` will only work in a compositor that implements the layer-shell protocol. Typically,
 ///wlr-roots based compositors.
-pub enum Swww {
+pub enum Awww {
     ///Fills the specified outputs with the given color.
     ///
     ///Defaults to filling all outputs with black.
@@ -169,10 +169,10 @@ pub enum Swww {
     ///Restores the last displayed image on the specified outputs.
     Restore(Restore),
 
-    ///Clears the swww cache.
+    ///Clears the awww cache.
     ///
     ///We currently store the address of the last file set as wallpaper for each monitor, as well
-    ///as the animation frames of every gif ever set for a given version of `swww`.
+    ///as the animation frames of every gif ever set for a given version of `awww`.
     ClearCache,
 
     /// Sends an image (or animated gif) for the daemon to display.
@@ -188,14 +188,14 @@ pub enum Swww {
 
     ///Asks the daemon to print output information (names and dimensions).
     ///
-    ///You may use this to find out valid values for the <swww-img --outputs> option. If you want
+    ///You may use this to find out valid values for the <awww-img --outputs> option. If you want
     ///more detailed information about your outputs, I would recommend trying wlr-randr.
     Query(Query),
 }
 
 #[derive(Parser)]
 pub struct Clear {
-    /// Clear all swww-daemon instances (all namespaces)
+    /// Clear all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
@@ -207,8 +207,8 @@ pub struct Clear {
 
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -225,14 +225,14 @@ pub struct Clear {
 
 #[derive(Parser)]
 pub struct Pause {
-    /// Pause all swww-daemon instances (all namespaces)
+    /// Pause all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -243,14 +243,14 @@ pub struct Pause {
 
 #[derive(Parser)]
 pub struct Kill {
-    /// Kill all swww-daemon instances (all namespaces)
+    /// Kill all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -261,14 +261,14 @@ pub struct Kill {
 
 #[derive(Parser)]
 pub struct Query {
-    /// Query all swww-daemon instances (all namespaces)
+    /// Query all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -318,7 +318,7 @@ impl std::str::FromStr for ResizeStrategy {
             _ => Err(
                 "unrecognized resize strategy. Valid resize strategies are:\n\
                      no | crop | fit | stretch\n\
-                     see swww img --help for more details",
+                     see awww img --help for more details",
             ),
         }
     }
@@ -326,13 +326,13 @@ impl std::str::FromStr for ResizeStrategy {
 
 #[derive(Parser)]
 pub struct Restore {
-    /// Restore all swww-daemon instances (all namespaces)
+    /// Restore all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -349,7 +349,7 @@ pub struct Restore {
 
 #[derive(Parser)]
 pub struct Img {
-    /// Set the image for all swww-daemon instances (all namespaces)
+    /// Set the image for all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
@@ -365,8 +365,8 @@ pub struct Img {
 
     /// The daemon's namespace.
     ///
-    /// The resulting namespace will be 'swww-daemon' appended to what you pass in this argument.
-    /// For this to work, you must call `swww-daemon --namespace <custom_namespace>` with the same
+    /// The resulting namespace will be 'awww-daemon' appended to what you pass in this argument.
+    /// For this to work, you must call `awww-daemon --namespace <custom_namespace>` with the same
     /// value you use here.
     ///
     /// You can specify multiple namespaces at once with multiple `--namespaces` arguments. The
@@ -395,7 +395,7 @@ pub struct Img {
     #[arg(value_parser = from_hex, long, default_value = "000000ff")]
     pub fill_color: [u8; 4],
 
-    ///Filter to use when scaling images (run swww img --help to see options).
+    ///Filter to use when scaling images (run awww img --help to see options).
     ///
     ///Available options are:
     ///
@@ -443,7 +443,7 @@ pub struct Img {
     ///'outer' is the same as grow but the circle shrinks instead of growing.
     ///
     ///Finally, 'random' will select a transition effect at random
-    #[arg(short, long, env = "SWWW_TRANSITION", default_value = "simple")]
+    #[arg(short, long, env = "AWWW_TRANSITION", default_value = "simple")]
     pub transition_type: TransitionType,
 
     ///How fast the transition approaches the new image.
@@ -457,7 +457,7 @@ pub struct Img {
     /// This defaults to 2 when transition-type is 'simple', and 90 otherwise
     #[arg(
         long,
-        env = "SWWW_TRANSITION_STEP",
+        env = "AWWW_TRANSITION_STEP",
         default_value = "90",
         default_value_if("transition_type", "simple", "2")
     )]
@@ -466,7 +466,7 @@ pub struct Img {
     ///How long the transition takes to complete in seconds.
     ///
     ///Note that this doesn't work with the 'simple' transition
-    #[arg(long, env = "SWWW_TRANSITION_DURATION", default_value = "3")]
+    #[arg(long, env = "AWWW_TRANSITION_DURATION", default_value = "3")]
     pub transition_duration: f32,
 
     ///Frame rate for the transition effect.
@@ -475,14 +475,14 @@ pub struct Img {
     ///
     ///Also note this is **different** from the transition-step. That one controls by how much we
     ///approach the new image every frame.
-    #[arg(long, env = "SWWW_TRANSITION_FPS", default_value = "30")]
+    #[arg(long, env = "AWWW_TRANSITION_FPS", default_value = "30")]
     pub transition_fps: u16,
 
     ///This is used for the 'wipe' and 'wave' transitions. It controls the angle of the wipe
     ///
     ///Note that the angle is in degrees, where '0' is right to left and '90' is top to bottom,
     /// and '270' bottom to top
-    #[arg(long, env = "SWWW_TRANSITION_ANGLE", default_value = "45")]
+    #[arg(long, env = "AWWW_TRANSITION_ANGLE", default_value = "45")]
     pub transition_angle: f64,
 
     ///This is only used for the 'grow','outer' transitions. It controls the center of circle
@@ -496,18 +496,18 @@ pub struct Img {
     ///the value can also be an alias which will set the position accordingly):
     /// 'center' | 'top' | 'left' | 'right' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' |
     /// 'bottom-right'
-    #[arg(long, env = "SWWW_TRANSITION_POS", default_value = "center", value_parser=parse_coords)]
+    #[arg(long, env = "AWWW_TRANSITION_POS", default_value = "center", value_parser=parse_coords)]
     pub transition_pos: CliPosition,
 
     ///bezier curve to use for the transition
     ///https://cubic-bezier.com is a good website to get these values from
     ///
     ///eg: 0.0,0.0,1.0,1.0 for linear animation
-    #[arg(long, env = "SWWW_TRANSITION_BEZIER", default_value = ".54,0,.34,.99", value_parser = parse_bezier)]
+    #[arg(long, env = "AWWW_TRANSITION_BEZIER", default_value = ".54,0,.34,.99", value_parser = parse_bezier)]
     pub transition_bezier: (f32, f32, f32, f32),
 
     ///currently only used for 'wave' transition to control the width and height of each wave
-    #[arg(long, env = "SWWW_TRANSITION_WAVE", default_value = "20,20", value_parser = parse_wave)]
+    #[arg(long, env = "AWWW_TRANSITION_WAVE", default_value = "20,20", value_parser = parse_wave)]
     pub transition_wave: (f32, f32),
 
     /// inverts the y position sent in 'transition_pos' flag

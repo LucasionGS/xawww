@@ -1,10 +1,10 @@
-swww(1)
+awww(1)
 
 # NAME
-swww - A Solution to your Wayland Wallpaper Woes
+awww - A Solution to your Wayland Wallpaper Woes
 
 # SYNOPSIS
-*swww* <COMMAND>
+*awww* <COMMAND>
 
 # COMMANDS
 
@@ -15,7 +15,7 @@ swww - A Solution to your Wayland Wallpaper Woes
 	Restores the last displayed image on the specified outputs
 
 *clear-cache*
-	Deletes the *swww* cache directory
+	Deletes the *awww* cache directory
 
 *img*
 	Sends an image (or animated gif) for the daemon to display
@@ -38,29 +38,28 @@ swww - A Solution to your Wayland Wallpaper Woes
 	Print  version
 
 # DESCRIPTION
-*swww* is a wallpaper manager that lets you change what your monitors display as
-a background by controlling the *swww-daemon* at runtime.
+*awww* is a wallpaper manager that lets you change what your monitors display as
+a background by controlling the *awww-daemon* at runtime.
 
 It supports animated gifs and putting different stuff in different monitors. I
 also did my best to make it as resource efficient as possible.
 
-To start, begin by running *swww-daemon*. That will set up the *swww-daemon*.
-Then, you can send images to be displayed with *swww img*. To kill the daemon,
-use *swww kill*.
+To start, begin by running *awww-daemon*. That will set up the *awww-daemon*.
+Then, you can send images to be displayed with *awww img*. To kill the daemon,
+use *awww kill*.
 
-*Note that swww only works in a compositor that implements the layer-shell
+*Note that awww only works in a compositor that implements the layer-shell
 protocol*. Typically, _wlr-roots_ based compositors.
 
 # FILES
-*swww* will create the following files in your system:
-	- A socket in _${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}-swww-daemon.<specified
+*awww* will create the following files in your system:
+	- A socket in _${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}-awww-daemon.<specified
 	namespace>.socket_,  or
-	_/tmp/swww/${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket_, if
+	_/tmp/awww/${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket_, if
 	$XDG_RUNTIME_DIR is not set.
-	- Cache files in _$XDG_CACHE_HOME/swww_ or _$HOME/.cache/swww_ if
+	- Cache files in _$XDG_CACHE_HOME/awww_ or _$HOME/.cache/awww_ if
 	  $XDG_CACHE_HOME does not exist. These are used to set the wallpaper to the
 	  previous image when a monitor is (re)connected or turned on.
 
 # SEE ALSO
-*swww-daemon*(1) *swww-clear*(1) *swww-img*(1) *swww-kill*(1)
-*swww-query*(1)
+*awww-daemon*(1) *awww-clear*(1) *awww-img*(1) *awww-kill*(1) *awww-query*(1)

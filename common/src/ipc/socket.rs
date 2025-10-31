@@ -62,10 +62,10 @@ impl<T> IpcSocket<T> {
                     break;
                 }
             }
-            format!("{}-swww-daemon", &wayland_socket[i..])
+            format!("{}-awww-daemon", &wayland_socket[i..])
         } else {
             log::warn!("WAYLAND_DISPLAY variable not set. Defaulting to wayland-0");
-            "wayland-0-swww-daemon".to_string()
+            "wayland-0-awww-daemon".to_string()
         };
 
         runtime.push(display);

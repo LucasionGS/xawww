@@ -1,25 +1,25 @@
-swww-query(1)
+awww-query(1)
 
 # NAME
-swww-query
+awww-query
 
 # SYNOPSIS
-*swww query*
+*awww query*
 
 # OPTIONS
 
 *-a*,*--all*
-	Send this command to all active *swww-daemon* namespaces.
+	Send this command to all active *awww-daemon* namespaces.
 
 *-n*,*--namespace* <namespace>
 	Which wayland namespace to send this command to.
 
 	You can specify this option multiple times to send commands to multiple
-	namespaces at once: *swww query -n <namespace1> -n <namespace 2>*.
+	namespaces at once: *awww query -n <namespace1> -n <namespace 2>*.
 
-	This affects the name of the *swww-daemon* socket we will use to
+	This affects the name of the *awww-daemon* socket we will use to
 	communicate with. Specifically, our socket name is
-	_${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket_.
+	_${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket_.
 
 	Some compositors can have several different wallpapers per output. This
 	allows you to differentiate between them. Most users will probably not have
@@ -32,13 +32,13 @@ swww-query
 
 Asks the daemon to print output information (names and dimensions).
 
-You may use this to find out valid values for the <swww-img --outputs> option. If
+You may use this to find out valid values for the <awww-img --outputs> option. If
 you want more detailed information about your outputs, I would recommend trying
 something like *wlr-randr*.
 
 # OUTPUT FORMAT
 
-Currently, *swww query* prints information in the following format:
+Currently, *awww query* prints information in the following format:
 
 ```
 NAMESPACE: OUTPUT: SIZE, scale: SCALE, currently displaying: IMAGE_OR_COLOR

@@ -32,23 +32,23 @@
   to use. However, many people have had weird bugs when using any format other
   than `xrgb`. Therefore, we have made that the default, and only change it when
   the user specifically asks for it.
-  * `swww query` now returns information in the following format:
+  * `awww query` now returns information in the following format:
   `<namespace>: OUTPUT: SIZE, scale: SCALE, currently displaying: IMAGE_OR_COLOR`
   * we are creating the socket in a slightly different location now:
-  `${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}-swww-daemon.<specified namespace>.socket`
+  `${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}-awww-daemon.<specified namespace>.socket`
 
 #### Additions
 
   * every command (except `clear-cache`) now accepts a `-n|--namespace`
-  argument. This namespace will then be appended to `swww-daemon` to make up the
+  argument. This namespace will then be appended to `awww-daemon` to make up the
   wayland namespace of the daemon's layer surface.
   * as a convenience, every command (except `clear-cache`) also accepts a
   `-a|--all` flag, that lets the user send commands to all namespaces at once.
   * support `avif` decoding through `dav1d`, with the `--features=avif`
   compilation option.
   * we finally support static `SVG`s!
-  * `swww-daemon` now correctly renders static images with transparency.
-  * `swww clear` now accepts colors with an alpha value.
+  * `awww-daemon` now correctly renders static images with transparency.
+  * `awww clear` now accepts colors with an alpha value.
 
 #### Fixes
 
@@ -85,7 +85,7 @@ A small update with important bug fixes.
 
 #### Fixes
 
-  * Make `swww` work on systems where `c_long` is is not mapped to `i64`, by
+  * Make `awww` work on systems where `c_long` is is not mapped to `i64`, by
   @triallax
   * Fix fractional scaling, by @cyuria
   * @nullcubee and @iynaix helped me understand fix the nix build (thanks, guys)
@@ -101,11 +101,11 @@ Okay, this one's a doozy.
 
 #### Additions
 
-  * new `--layer` option for `swww-daemon`
+  * new `--layer` option for `awww-daemon`
   * new `--resize stretch` option, by @rexept
   * cache now stores the image filter, by @kerty0
   * we can now read images from standard input, by @iynaix
-  * new `swww_randomize_multi.sh` example script, by @cplir-c
+  * new `awww_randomize_multi.sh` example script, by @cplir-c
 
 #### Fixes
 
@@ -133,7 +133,7 @@ has changed so much that testing them in isolation would be challenging.
   the animations are now fast enough that we no longer need `rayon` as a
   dependency.
   * more generally, we have completed nuked the multi-threaded code.
-  `swww-daemon` now only spawns a single thread, letting us get rid of every
+  `awww-daemon` now only spawns a single thread, letting us get rid of every
   `Arc` wrapper, and other annoying, fragile, synchronization code.
   * we are using `rustix` instead of the `std` as much as possible, for lower
   syscall overhead
@@ -180,7 +180,7 @@ This is mostly just fixes and small improvements.
 
 #### Additions
 
-  * add --no-cache option to `swww-daemon`, by @lucasreis1
+  * add --no-cache option to `awww-daemon`, by @lucasreis1
 
 #### Internal improvements
 
@@ -224,7 +224,7 @@ Quick release to fix a scaling error that might affect a lot of people.
   * fix image resize when image is larger than monitor
   * fix transitions performance that had regressed from versions 0.8.*
   * added SIGHUP to the list of signals we catch to exit properly
-  * allow `swww` to run on a nested wayland environment, by @Fuyukai.
+  * allow `awww` to run on a nested wayland environment, by @Fuyukai.
 
 #### Improvements
 
@@ -254,8 +254,8 @@ MSRV is now 1.74.0.
 
 #### Deprecated
 
-`swww init` is now considered deprecated. Use `swww-daemon` instead. To run it
-in the background, simply do `swww-daemon &`.
+`awww init` is now considered deprecated. Use `awww-daemon` instead. To run it
+in the background, simply do `awww-daemon &`.
 
 #### Fixes
 
@@ -271,7 +271,7 @@ in the background, simply do `swww-daemon &`.
   * animations no longer overlap when sending two animated images in succession
   * fix randomize script trying to use directories as images. Fix was suggested
   by @MRSS02
-  * waiting for child swww process when loading the cache, preventing zombie
+  * waiting for child awww process when loading the cache, preventing zombie
   processes
   * waiting for daemon initialization before certain requests. By @musjj
 
@@ -296,7 +296,7 @@ in the background, simply do `swww-daemon &`.
 #### Known Issues
 
 Some people are having some problems with the 3 channel color formats (see issue
-#233). Currently, initializing the daemon with `swww-daemon --format xrgb` is a
+#233). Currently, initializing the daemon with `awww-daemon --format xrgb` is a
 workaround to that.
 
 ### 0.8.2
@@ -308,7 +308,7 @@ wasn't the case at the time we've published these versions.
 #### **ATTENTION PACKAGE MAINTAINERS** 
 
 I've changed my username from `Horus645` to `LGFae`. This means you will have to
-update the remote url to `https://github.com/LGFae/swww`. Anyone who also has
+update the remote url to `https://github.com/LGFae/awww`. Anyone who also has
 direct links to the old address should update them.
 
 I've done this because mostly to make it more professional looking. I've
@@ -319,9 +319,9 @@ apologize for the inconvenience.
 #### Changes:
 
   * update MSRV in README.md, by @micielski
-  * implemented a `--no-cache` flag for `swww init`
+  * implemented a `--no-cache` flag for `awww init`
   * fixes to the build script, by @m4rch3n1ng
-  * client waits for daemon to be ready on `swww init`
+  * client waits for daemon to be ready on `awww init`
   * more accurate image fit implementation
   * added MSRV to Cargo.toml, by @akida31
   * fix some documentation typos and inacuracies
@@ -330,10 +330,10 @@ apologize for the inconvenience.
   * implement animated WebP Support, by @MichaelOultram
   * some other memory optimizations, by @MichaelOultram
   * implement `clear-cache` command
-  * we also automatically clear the cache from old `swww` versions now!
+  * we also automatically clear the cache from old `awww` versions now!
 
 Also, we have updated all crates versions so that they all match. This should
-help some package maintainers that were having difficulty setting `swww` up for
+help some package maintainers that were having difficulty setting `awww` up for
 e.g. Debian, I believe.
 
 
@@ -341,11 +341,11 @@ e.g. Debian, I believe.
 
 Pretty a much a near-exclusive bug fix release:
 
-  * Fixed `swww clear` causing the daemon to exit
-  * The cache is once again being correctly load during `swww init`
+  * Fixed `awww clear` causing the daemon to exit
+  * The cache is once again being correctly load during `awww init`
   * Fixed glitches happening to animated gifs (frames were being loaded in the 
   wrong order)
-  * Fixed `swww-daemon` sometimes not drawing to the whole screen (forgot to set
+  * Fixed `awww-daemon` sometimes not drawing to the whole screen (forgot to set
   the exclusive zone to -2)
   * Fixed an issue where the daemon would hang if multiple images were sent in
   quick succession
@@ -365,8 +365,8 @@ recommend users to delete the previous cache directory once they install this
 new version**:
 
 ```bash
-rm -r $XDG_CACHE_HOME/swww # OR
-rm -r $HOME/.cache/swww
+rm -r $XDG_CACHE_HOME/awww # OR
+rm -r $HOME/.cache/awww
 ```
 
 #### BREAKING CHANGE: NUKED `--sync` flag:
@@ -417,7 +417,7 @@ by. Apologies in advance, and keep this in mind when upgrading.
 ### 0.7.3
 
 Fixes:
-  * Missing `/` when using `$HOME/.cache/swww`, by @max-ishere
+  * Missing `/` when using `$HOME/.cache/awww`, by @max-ishere
   * `--transition-step` with `simple` has saner defaults
   * correctly splitting outputs argument with ',', by @potatoattack
 
@@ -453,14 +453,14 @@ Improvements:
 	Have a look at it for more details.
   * We now also have automated spell checking. This let us fix a number in typos
     in our documentation, both internal and user-oriented.
-  * New option for `swww-img`: `--sync`. This syncs the animations in all your
+  * New option for `awww-img`: `--sync`. This syncs the animations in all your
   monitors. Note that *all monitors must be displaying animations* in order for
   it to work.
 
 Internal:
   * Integration tests are not run by default. You must now use
   `cargo test -- --ignored` to run them. This will make it possible for some
-  people (like the ones trying to package `swww` at Nix) to run some of the
+  people (like the ones trying to package `awww` at Nix) to run some of the
   tests in a sandboxed environment where they don't have access to the wayland
   server. If anyone is interested in running *all* tests, they can do that with
   `cargo test -- --include-ignored`.
@@ -472,21 +472,21 @@ Improvements:
   (@flick0)
 
 Fixes:
-  * `swww query` not returning the image being displayed
-  * document `--no_resize` and `--fill_color` options for `swww img`
+  * `awww query` not returning the image being displayed
+  * document `--no_resize` and `--fill_color` options for `awww img`
   * reading img from stdin (now with a proper integration test to make sure
   it doesn't happen again) (#42)
 
 Internal:
-  * fixed `tests/integration_tests.rs` calling the wrong `swww-daemon` binary
+  * fixed `tests/integration_tests.rs` calling the wrong `awww-daemon` binary
 
 ### 0.7.0
 
 **BREAKING CHANGES**
 
-  * **ATTENTION, PACKAGE MAINTAINERS** - `swww` is now composed of two separate
-  binaries: `swww` and `swww-daemon`. **Both** must be installed on the user's
-  system in order for `swww` to work correctly. Doing this allowed for major
+  * **ATTENTION, PACKAGE MAINTAINERS** - `awww` is now composed of two separate
+  binaries: `awww` and `awww-daemon`. **Both** must be installed on the user's
+  system in order for `awww` to work correctly. Doing this allowed for major
   improvements in terms of overall memory usage, among other things (#52).
 
 Improvements:
@@ -518,8 +518,8 @@ Internal:
 
   * `transition-speed` no longer exists. Now, speed is controlled through a
   bezier curve (`transition-bezier`), and duration (`transition-duration`)
-  flags (note this also applies to the env var, SWWW_TRANSITION_SPEED). A
-  warning was added when we detect the presence of the SWWW_TRANSITION_SPEED
+  flags (note this also applies to the env var, AWWW_TRANSITION_SPEED). A
+  warning was added when we detect the presence of the AWWW_TRANSITION_SPEED
   environment variable. This warning will go away in the next release, it is
   only there as a means of making sure everyone knows the variable has been
   superseded, and having it in your configs no longer does anything.
@@ -537,13 +537,13 @@ Improvements:
 
 **BREAKING CHANGES**:
 
-  * `swww query` now formats its output as `<output>: ...`, instead of
+  * `awww query` now formats its output as `<output>: ...`, instead of
   `<output> = ...`. This will break your scripts if you relied on the output's
   format.
 
 Improvements:
 
-  * Fixed `swww` getting stuck on a futex when a new monitor was connected (#26)
+  * Fixed `awww` getting stuck on a futex when a new monitor was connected (#26)
   * New `wipe` transition by @flick0
   * Several small code improvements by @WhyNotHugo
   * Typo fix (@thebenperson)
@@ -597,19 +597,19 @@ Improvements:
   memory usage even lower.
 * Did all the preparatory work for us to start writing new transition effects.
   Ideally they should come in the next version, which should hopefully also be
-  our first release (since then I will consider swww to be pretty much feature
+  our first release (since then I will consider awww to be pretty much feature
   complete).
 
 ### 0.2.0
 
 Using unsafe to speed up decompression.
-Also, `swww init -i` and `swww init -c` may now be considered deprecated.
-It was originally created to bypass `swww init && swww img <path/to/img>` not
+Also, `awww init -i` and `awww init -c` may now be considered deprecated.
+It was originally created to bypass `awww init && awww img <path/to/img>` not
 working. Now, however, it seems to be working properly. In hindsight, it was
 probably already working for a while, but I failed to test it properly and
 thought it was still a problem.
 
-The `swww init -i` and `swww init -c` options shall remain for now, for 
+The `awww init -i` and `awww init -c` options shall remain for now, for 
 compatibility and just in case a regression happens. Once I am confident
 enough, they will be eliminated (that will let me erase around 50 lines of
 code, I think).

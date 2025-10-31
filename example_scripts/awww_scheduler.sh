@@ -5,7 +5,7 @@
 
 if [ $# -lt 2 ]; then
 	echo "Usage:
-	$0 <path/to/img [optional arguments to pass to swww]> <time in HH:MM format>
+	$0 <path/to/img [optional arguments to pass to awww]> <time in HH:MM format>
 
 This will use the 'at' command to schedule the image switch.
 You can control the transition fps or step by passing the respective options:
@@ -20,16 +20,16 @@ if ! type "at" > /dev/null 2>&1; then
 	exit 1
 fi
 
-echo "swww img $1" | at "$2"
+echo "awww img $1" | at "$2"
 
 # NOTE: the above line is really the only one that matters, so if you are
 # making a script and want to schedule a bunch of things at once, I recommend
 # creating a function, like:
 #
-# swww_schedule() {
-#     echo "swww img $1" | at "$2"
+# awww_schedule() {
+#     echo "awww img $1" | at "$2"
 # }
 #
 # Then, you can simply call:
-#     swww_schedule <path/to/img> <HH:MM>
+#     awww_schedule <path/to/img> <HH:MM>
 # as many time as you need

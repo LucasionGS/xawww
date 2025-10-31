@@ -1,5 +1,5 @@
 {
-  description = "swww, A Solution to your Wayland Wallpaper Woes";
+  description = "awww, A Solution to your Wayland Wallpaper Woes";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -36,7 +36,7 @@
   in {
     packages =
       lib.mapAttrs (system: pkgs: {
-        swww = let
+        awww = let
           rust = pkgs.rust-bin.stable.${rust-version}.default;
 
           rustPlatform = pkgs.makeRustPlatform {
@@ -45,7 +45,7 @@
           };
         in
           rustPlatform.buildRustPackage {
-            pname = "swww";
+            pname = "awww";
 
             src = pkgs.nix-gitignore.gitignoreSource [] ./.;
             inherit (cargoToml.workspace.package) version;
@@ -74,21 +74,21 @@
                 installManPage "$page"
               done
 
-              installShellCompletion --cmd swww \
-                --bash completions/swww.bash \
-                --fish completions/swww.fish \
-                --zsh completions/_swww
+              installShellCompletion --cmd awww \
+                --bash completions/awww.bash \
+                --fish completions/awww.fish \
+                --zsh completions/_awww
             '';
 
             meta = {
               description = "Efficient animated wallpaper daemon for wayland, controlled at runtime";
               license = lib.licenses.gpl3;
               platforms = lib.platforms.linux;
-              mainProgram = "swww";
+              mainProgram = "awww";
             };
           };
 
-        default = self.packages.${system}.swww;
+        default = self.packages.${system}.awww;
       })
       pkgsFor;
 
@@ -97,13 +97,13 @@
     devShells =
       lib.mapAttrs (system: pkgs: {
         default = pkgs.mkShell {
-          inputsFrom = [self.packages.${system}.swww];
+          inputsFrom = [self.packages.${system}.awww];
 
           packages = [pkgs.rust-bin.stable.${rust-version}.default];
         };
       })
       pkgsFor;
 
-    overlays.default = final: prev: {inherit (self.packages.${prev.system}) swww;};
+    overlays.default = final: prev: {inherit (self.packages.${prev.system}) awww;};
   };
 }

@@ -653,7 +653,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     globals.retain(|global| global.interface() == wayland::wl_output::NAME);
 
     // create the socket listener and setup the signal handlers
-    // this will also return an error if there is an `swww-daemon` instance already
+    // this will also return an error if there is an `awww-daemon` instance already
     // running
     let listener = SocketWrapper::new(&cli.namespace)?;
     setup_signals();
@@ -809,7 +809,7 @@ impl SocketWrapper {
         if fs::access(&addr, fs::Access::EXISTS).is_ok() {
             if is_daemon_running(namespace)? {
                 return Err(
-                    "There is an swww-daemon instance already running on this socket!".to_string(),
+                    "There is an awww-daemon instance already running on this socket!".to_string(),
                 );
             }
             warn!(

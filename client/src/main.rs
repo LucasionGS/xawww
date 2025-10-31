@@ -9,36 +9,36 @@ mod imgproc;
 use imgproc::*;
 
 mod cli;
-use cli::{CliImage, Filter, ResizeStrategy, Swww};
+use cli::{CliImage, Filter, ResizeStrategy, Awww};
 
 fn main() -> Result<(), String> {
-    let swww = Swww::parse();
+    let awww = Awww::parse();
 
-    let all = match &swww {
-        Swww::Clear(clear) => clear.all,
-        Swww::Restore(restore) => restore.all,
-        Swww::ClearCache => {
+    let all = match &awww {
+        Awww::Clear(clear) => clear.all,
+        Awww::Restore(restore) => restore.all,
+        Awww::ClearCache => {
             return cache::clean().map_err(|e| format!("failed to clean the cache: {e}"));
         }
-        Swww::Img(img) => img.all,
-        Swww::Pause(pause) => pause.all,
-        Swww::Kill(kill) => kill.all,
-        Swww::Query(query) => query.all,
+        Awww::Img(img) => img.all,
+        Awww::Pause(pause) => pause.all,
+        Awww::Kill(kill) => kill.all,
+        Awww::Query(query) => query.all,
     };
 
     let namespaces = if all {
         IpcSocket::<Client>::all_namespaces().map_err(|e| e.to_string())?
     } else {
-        match &swww {
-            Swww::Clear(clear) => clear.namespace.clone(),
-            Swww::Restore(restore) => restore.namespace.clone(),
-            Swww::ClearCache => {
+        match &awww {
+            Awww::Clear(clear) => clear.namespace.clone(),
+            Awww::Restore(restore) => restore.namespace.clone(),
+            Awww::ClearCache => {
                 return cache::clean().map_err(|e| format!("failed to clean the cache: {e}"));
             }
-            Swww::Img(img) => img.namespace.clone(),
-            Swww::Pause(pause) => pause.namespace.clone(),
-            Swww::Kill(kill) => kill.namespace.clone(),
-            Swww::Query(query) => query.namespace.clone(),
+            Awww::Img(img) => img.namespace.clone(),
+            Awww::Pause(pause) => pause.namespace.clone(),
+            Awww::Kill(kill) => kill.namespace.clone(),
+            Awww::Query(query) => query.namespace.clone(),
         }
     };
 
@@ -58,12 +58,12 @@ fn main() -> Result<(), String> {
             std::thread::sleep(Duration::from_millis(1));
         }
 
-        process_swww_args(&swww, &namespace)?;
+        process_awww_args(&awww, &namespace)?;
     }
     Ok(())
 }
 
-fn process_swww_args(args: &Swww, namespace: &str) -> Result<(), String> {
+fn process_awww_args(args: &Awww, namespace: &str) -> Result<(), String> {
     let request = match make_request(args, namespace)? {
         Some(request) => request,
         None => return Ok(()),
@@ -75,7 +75,7 @@ fn process_swww_args(args: &Swww, namespace: &str) -> Result<(), String> {
     match Answer::receive(bytes) {
         Answer::Info(info) => info.iter().for_each(|i| println!("{namespace}: {i}")),
         Answer::Ok => {
-            if let Swww::Kill(_) = args {
+            if let Awww::Kill(_) = args {
                 #[cfg(debug_assertions)]
                 let tries = 20;
                 #[cfg(not(debug_assertions))]
@@ -100,9 +100,9 @@ fn process_swww_args(args: &Swww, namespace: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn make_request(args: &Swww, namespace: &str) -> Result<Option<RequestSend>, String> {
+fn make_request(args: &Awww, namespace: &str) -> Result<Option<RequestSend>, String> {
     match args {
-        Swww::Clear(c) => {
+        Awww::Clear(c) => {
             let (format, _, _) = get_format_dims_and_outputs(&[], namespace)?;
             let mut color = c.color;
             if format.must_swap_r_and_b_channels() {
@@ -114,13 +114,13 @@ fn make_request(args: &Swww, namespace: &str) -> Result<Option<RequestSend>, Str
             };
             Ok(Some(RequestSend::Clear(clear.create_request())))
         }
-        Swww::Restore(restore) => {
+        Awww::Restore(restore) => {
             let requested_outputs = split_cmdline_outputs(&restore.outputs);
             restore_from_cache(&requested_outputs, namespace)?;
             Ok(None)
         }
-        Swww::ClearCache => unreachable!("there is no request for clear-cache"),
-        Swww::Img(img) => {
+        Awww::ClearCache => unreachable!("there is no request for clear-cache"),
+        Awww::Img(img) => {
             let requested_outputs = split_cmdline_outputs(&img.outputs);
             let (format, dims, outputs) =
                 get_format_dims_and_outputs(&requested_outputs, namespace)?;
@@ -130,9 +130,9 @@ fn make_request(args: &Swww, namespace: &str) -> Result<Option<RequestSend>, Str
 
             Ok(Some(RequestSend::Img(img_request)))
         }
-        Swww::Pause(_) => Ok(Some(RequestSend::Pause)),
-        Swww::Kill(_) => Ok(Some(RequestSend::Kill)),
-        Swww::Query(_) => Ok(Some(RequestSend::Query)),
+        Awww::Pause(_) => Ok(Some(RequestSend::Pause)),
+        Awww::Kill(_) => Ok(Some(RequestSend::Kill)),
+        Awww::Query(_) => Ok(Some(RequestSend::Query)),
     }
 }
 
@@ -380,8 +380,8 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    process_swww_args(
-        &Swww::Img(cli::Img {
+    process_awww_args(
+        &Awww::Img(cli::Img {
             all: false,
             image: cli::parse_image(cache.img_path)?,
             outputs: output.to_string(),

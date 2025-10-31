@@ -249,12 +249,12 @@ fn create_dir(p: &Path) -> io::Result<()> {
 fn user_cache_dir() -> io::Result<PathBuf> {
     if let Ok(path) = std::env::var("XDG_CACHE_HOME") {
         let mut path: PathBuf = path.into();
-        path.push("swww");
+        path.push("awww");
         Ok(path)
     } else if let Ok(path) = std::env::var("HOME") {
         let mut path: PathBuf = path.into();
         path.push(".cache");
-        path.push("swww");
+        path.push("awww");
         Ok(path)
     } else {
         Err(std::io::Error::other(

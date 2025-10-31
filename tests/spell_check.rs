@@ -1,7 +1,7 @@
 use std::process::Command;
 
 /// We ignore because people might not have codespell installed, and I don't want to force anyone to
-/// install codespell to e.g. run tests before installing swww. This may change in the future
+/// install codespell to e.g. run tests before installing awww. This may change in the future
 #[test]
 #[ignore]
 fn spell_check_code_and_man_pages() {

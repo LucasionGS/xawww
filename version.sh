@@ -8,7 +8,7 @@ if [ $# -lt 1 ]; then
 	exit 1
 fi
 
-pkill swww-daemon
+pkill awww-daemon
 
 set -e
 

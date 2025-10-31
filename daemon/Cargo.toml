@@ -1,5 +1,5 @@
 [package]
-name = "swww-daemon"
+name = "awww-daemon"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
