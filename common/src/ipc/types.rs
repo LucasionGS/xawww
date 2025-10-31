@@ -582,7 +582,7 @@ impl Nanos {
 
     #[inline]
     pub fn from_millis(millis: u64) -> Self {
-        Self(millis * 1000)
+        Self(millis * 1_000_000)
     }
 
     #[inline]
