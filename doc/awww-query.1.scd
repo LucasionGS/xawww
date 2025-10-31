@@ -51,3 +51,27 @@ where *SIZE* is in the format *WxH* (eg.: *1920x1080*), *SCALE* in "scale:
 NUMBER", and *IMAGE_OR_COLOR* in
 	- "image: IMAGENAME", if it's an image; or
 	- "color: RGB", if it's a color
+
+# JSON FORMAT
+
+The *json* format will print information like so:
+
+```
+{
+"NAMESPACE": [<LIST OF OUTPUTS>]
+}
+```
+
+Where each output in the list is in format:
+
+```
+{
+	"name": <NAME>,
+	"width": <WIDTH>,
+	"height": <HEIGHT>,
+	"scale": <SCALE>,
+	"displaying": {
+		"image" OR "color": <PATH/TO/IMAGE> OR <COLOR IN HEXA>
+	},
+}
+```
