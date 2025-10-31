@@ -265,6 +265,7 @@ fn user_cache_dir() -> io::Result<PathBuf> {
 
 fn cache_dir() -> io::Result<PathBuf> {
     let mut path = user_cache_dir()?;
+    create_dir(&path)?;
     path.push(CACHE_DIRNAME);
     create_dir(&path)?;
     Ok(path)

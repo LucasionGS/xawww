@@ -127,6 +127,7 @@ dependencies = [
  "fast_image_resize",
  "fastrand",
  "image",
+ "log",
  "resvg",
  "rustix",
 ]

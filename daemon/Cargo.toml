@@ -13,8 +13,7 @@ workspace = true
 common = { workspace = true }
 
 waybackend = { version = "0.7" }
-log = { version = "0.4", default-features = false, features = [
-  "max_level_trace",
+log = { version = "0.4", default-features = false, features = [ "max_level_trace",
   "release_max_level_info",
   "std",
 ] }

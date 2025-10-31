@@ -10,6 +10,7 @@ license-file.workspace = true
 workspace = true
 
 [dependencies]
+log =   { version = "0.4",  default-features = false, features = [ "std" ] }
 image = { version = "0.25", default-features = false, features = [
   # all formats, except avif, since avif compiles just rav1d, which is just an
   # encoder, which we do not care about. avif-native is an optional dependency,
@@ -30,7 +31,7 @@ image = { version = "0.25", default-features = false, features = [
   "webp",
 ] }
 resvg = { version = "0.45" }
-rustix = { version = "1.1", default-features = false, features = [ "fs" ] }
+rustix = { version = "1.1", default-features = false, features = [ "fs", "stdio" ] }
 fast_image_resize = "5.3"
 clap = { version = "4.5", features = ["derive", "wrap_help", "env"] }
 fastrand = { version = "2.3", default-features = false, features = ["std"] }
