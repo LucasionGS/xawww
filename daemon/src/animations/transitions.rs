@@ -1,5 +1,4 @@
 use core::num::NonZeroU8;
-use std::time::Instant;
 
 use crate::{WaylandObject, wallpaper::WallpaperCell};
 use common::ipc::{PixelFormat, Transition, TransitionType};
@@ -9,7 +8,7 @@ use keyframe::{
 };
 use waybackend::{Waybackend, objman::ObjectManager};
 
-fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence<f32>, Instant) {
+fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence<f32>, f64) {
     let bezier = BezierCurve::from(
         Vector2 {
             x: transition.bezier.0,
@@ -20,10 +19,8 @@ fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequen
             y: transition.bezier.3,
         },
     );
-    (
-        keyframes![(start, 0.0, bezier), (end, transition.duration, bezier)],
-        Instant::now(),
-    )
+    let animation_sequence = keyframes![(start, 0.0, bezier), (end, transition.duration, bezier)];
+    (animation_sequence, now_f64())
 }
 
 #[inline(always)]
@@ -166,7 +163,7 @@ impl Simple {
 }
 
 struct Fade {
-    start: Instant,
+    start: f64,
     seq: AnimationSequence<f32>,
     step: u16,
 }
@@ -197,13 +194,13 @@ impl Fade {
                 });
         }
         self.step = (256.0 * self.seq.now() as f64).trunc() as u16;
-        self.seq.advance_to(self.start.elapsed().as_secs_f64());
-        self.start.elapsed().as_secs_f64() > self.seq.duration()
+        self.seq.advance_to(elapsed(self.start));
+        elapsed(self.start) > self.seq.duration()
     }
 }
 
 struct Wave {
-    start: Instant,
+    start: f64,
     seq: AnimationSequence<f32>,
     center: (u32, u32),
     sin: f64,
@@ -287,7 +284,7 @@ impl Wave {
 
         let channels = pixel_format.channels() as usize;
         let offset = self.seq.now() as f64;
-        self.seq.advance_to(self.start.elapsed().as_secs_f64());
+        self.seq.advance_to(elapsed(self.start));
 
         for wallpaper in wallpapers.iter() {
             let mut wallpaper = wallpaper.borrow_mut();
@@ -340,12 +337,12 @@ impl Wave {
             });
         }
 
-        self.start.elapsed().as_secs_f64() > self.seq.duration()
+        elapsed(self.start) > self.seq.duration()
     }
 }
 
 struct Wipe {
-    start: Instant,
+    start: f64,
     seq: AnimationSequence<f32>,
     center: (u32, u32),
     circle_radius: f64,
@@ -405,7 +402,7 @@ impl Wipe {
         } = *self;
         let channels = pixel_format.channels() as usize;
         let offset = self.seq.now() as f64;
-        self.seq.advance_to(self.start.elapsed().as_secs_f64());
+        self.seq.advance_to(elapsed(self.start));
         for wallpaper in wallpapers.iter() {
             let mut wallpaper = wallpaper.borrow_mut();
             let dim = wallpaper.get_dimensions();
@@ -432,12 +429,12 @@ impl Wipe {
                 }
             });
         }
-        self.start.elapsed().as_secs_f64() > self.seq.duration()
+        elapsed(self.start) > self.seq.duration()
     }
 }
 
 struct Grow {
-    start: Instant,
+    start: f64,
     seq: AnimationSequence<f32>,
     center_x: usize,
     center_y: usize,
@@ -518,13 +515,13 @@ impl Grow {
         }
 
         self.dist_center = self.seq.now();
-        self.seq.advance_to(self.start.elapsed().as_secs_f64());
-        self.start.elapsed().as_secs_f64() > self.seq.duration()
+        self.seq.advance_to(elapsed(self.start));
+        elapsed(self.start) > self.seq.duration()
     }
 }
 
 struct Outer {
-    start: Instant,
+    start: f64,
     seq: AnimationSequence<f32>,
     center_x: usize,
     center_y: usize,
@@ -603,9 +600,19 @@ impl Outer {
             });
         }
         self.dist_center = self.seq.now();
-        self.seq.advance_to(self.start.elapsed().as_secs_f64());
-        self.start.elapsed().as_secs_f64() > self.seq.duration()
+        self.seq.advance_to(elapsed(self.start));
+        elapsed(self.start) > self.seq.duration()
     }
+}
+
+fn now_f64() -> f64 {
+    let t = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+    t.tv_sec as f64 + t.tv_nsec as f64 / 1_000_000_000.0
+}
+
+fn elapsed(start: f64) -> f64 {
+    let now = now_f64();
+    now - start
 }
 
 #[cfg(test)]
