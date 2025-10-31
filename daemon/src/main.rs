@@ -18,6 +18,7 @@ use wayland::zwlr_layer_shell_v1::Layer;
 
 use core::{
     num::NonZeroI32,
+    ptr,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -336,7 +337,7 @@ impl wayland::wl_registry::EvHandler for Daemon {
         {
             let w = self.wallpapers.remove(i);
             w.borrow_mut().destroy(&mut self.backend);
-            self.stop_animations(std::slice::from_ref(&w));
+            self.stop_animations(core::slice::from_ref(&w));
         } else if let Some(i) = self
             .pending_outputs
             .iter()
@@ -550,7 +551,7 @@ impl wayland::zwlr_layer_surface_v1::EvHandler for Daemon {
         {
             let w = self.wallpapers.remove(i);
             w.borrow_mut().destroy(&mut self.backend);
-            self.stop_animations(std::slice::from_ref(&w));
+            self.stop_animations(core::slice::from_ref(&w));
         }
     }
 }
@@ -611,7 +612,7 @@ enum WaylandObject {
     FractionalScale,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn core::error::Error>> {
     // first, get the command line arguments and make the logger
     let cli = cli::Cli::new();
     make_logger(cli.quiet);
@@ -750,8 +751,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn setup_signals() {
     // C data structure, expected to be zeroed out.
-    let mut sigaction: libc::sigaction = unsafe { std::mem::zeroed() };
-    unsafe { libc::sigemptyset(std::ptr::addr_of_mut!(sigaction.sa_mask)) };
+    let mut sigaction: libc::sigaction = unsafe { core::mem::zeroed() };
+    unsafe { libc::sigemptyset(ptr::addr_of_mut!(sigaction.sa_mask)) };
 
     #[cfg(not(target_os = "aix"))]
     {
@@ -763,8 +764,7 @@ fn setup_signals() {
     }
 
     for signal in [libc::SIGINT, libc::SIGQUIT, libc::SIGTERM, libc::SIGHUP] {
-        let ret =
-            unsafe { libc::sigaction(signal, std::ptr::addr_of!(sigaction), std::ptr::null_mut()) };
+        let ret = unsafe { libc::sigaction(signal, ptr::addr_of!(sigaction), ptr::null_mut()) };
         if ret != 0 {
             error!("Failed to install signal handler!");
         }
@@ -780,8 +780,7 @@ fn setup_signals() {
     }
 
     let signal = libc::SIGCHLD;
-    let ret =
-        unsafe { libc::sigaction(signal, std::ptr::addr_of!(sigaction), std::ptr::null_mut()) };
+    let ret = unsafe { libc::sigaction(signal, ptr::addr_of!(sigaction), ptr::null_mut()) };
     if ret != 0 {
         error!("Failed to install signal handler!");
     }

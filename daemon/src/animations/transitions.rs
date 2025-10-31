@@ -1,4 +1,5 @@
-use std::{num::NonZeroU8, time::Instant};
+use core::num::NonZeroU8;
+use std::time::Instant;
 
 use crate::{WaylandObject, wallpaper::WallpaperCell};
 use common::ipc::{PixelFormat, Transition, TransitionType};
@@ -609,7 +610,7 @@ impl Outer {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU8;
+    use super::*;
 
     #[test]
     fn change_byte() {

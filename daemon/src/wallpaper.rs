@@ -5,7 +5,7 @@ use common::{
 use log::{debug, error, warn};
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 
-use std::num::NonZeroI32;
+use core::num::NonZeroI32;
 
 mod bump_pool;
 mod cell;

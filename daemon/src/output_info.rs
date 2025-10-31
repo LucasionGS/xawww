@@ -1,7 +1,7 @@
 use common::ipc::Scale;
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 
-use std::num::NonZeroI32;
+use core::num::NonZeroI32;
 
 use crate::WaylandObject;
 

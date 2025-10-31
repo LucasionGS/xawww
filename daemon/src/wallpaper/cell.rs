@@ -61,7 +61,7 @@ impl WallpaperCell {
     }
 }
 
-impl<'a> std::ops::Deref for WallpaperBorrow<'a> {
+impl<'a> core::ops::Deref for WallpaperBorrow<'a> {
     type Target = Wallpaper;
 
     fn deref(&self) -> &Self::Target {
@@ -69,7 +69,7 @@ impl<'a> std::ops::Deref for WallpaperBorrow<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for WallpaperBorrowMut<'a> {
+impl<'a> core::ops::Deref for WallpaperBorrowMut<'a> {
     type Target = Wallpaper;
 
     fn deref(&self) -> &Self::Target {
@@ -77,7 +77,7 @@ impl<'a> std::ops::Deref for WallpaperBorrowMut<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for WallpaperBorrowMut<'a> {
+impl<'a> core::ops::DerefMut for WallpaperBorrowMut<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0
     }
