@@ -1,13 +1,14 @@
 use core::time::Duration;
 use std::env;
-use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use rustix::fd::OwnedFd;
+use rustix::fs;
 use rustix::io::Errno;
 use rustix::net;
 use rustix::time::Timespec;
+
+type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
 
 use super::ErrnoExt;
 use super::IpcError;
@@ -86,10 +87,10 @@ impl IpcSocket {
 
         let filename = match p.file_name() {
             Some(filename) => {
-                let mut f = filename.to_os_string();
+                let mut f = filename.to_vec();
                 // add a final '.' character, because the namespace is always preceded by a dot
                 // character
-                f.push(std::ffi::OsStr::from_bytes(b"."));
+                f.push(b'.');
                 f
             }
             None => {
@@ -99,17 +100,22 @@ impl IpcSocket {
             }
         };
 
-        let dir_entries = parent.read_dir()?;
-        Ok(dir_entries
+        let dir = fs::Dir::new(fs::open(
+            parent.as_bytes(),
+            fs::OFlags::RDONLY,
+            fs::Mode::RUSR,
+        )?)?;
+
+        Ok(dir
             .into_iter()
             .flatten()
             .filter_map(|entry| {
                 core::str::from_utf8(
                     entry
                         .file_name()
-                        .as_encoded_bytes()
+                        .to_bytes()
                         .strip_suffix(b".sock")?
-                        .strip_prefix(filename.as_encoded_bytes())?,
+                        .strip_prefix(filename.as_slice())?,
                 )
                 .map(ToString::to_string)
                 .ok()
@@ -139,7 +145,7 @@ impl IpcSocket {
         .context(IpcErrorKind::Socket)?;
 
         let path = Self::path(namespace);
-        let addr = net::SocketAddrUnix::new(&path).expect("addr is correct");
+        let addr = net::SocketAddrUnix::new(path.as_bytes()).expect("addr is correct");
 
         // this will be overwritten, Rust just doesn't know it
         let mut error = Errno::INVAL;
@@ -174,7 +180,8 @@ impl IpcSocket {
 
     /// Creates [`IpcSocket`] for use in server (i.e `Daemon`)
     pub fn server(namespace: &str) -> Result<Self, IpcError> {
-        let addr = net::SocketAddrUnix::new(Self::path(namespace)).expect("addr is correct");
+        let addr =
+            net::SocketAddrUnix::new(Self::path(namespace).as_bytes()).expect("addr is correct");
         let socket = net::socket_with(
             net::AddressFamily::UNIX,
             net::SocketType::STREAM,

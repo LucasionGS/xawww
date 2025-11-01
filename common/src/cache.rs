@@ -4,11 +4,11 @@
 //!   1. the client registers the last image sent for each output in a file
 //!   2. the daemon spawns a client that reloads that image when an output is created
 
-use std::{
-    fs::File,
-    io::{self, Read, Write},
-    path::{Path, PathBuf},
-};
+use rustix::path::Arg;
+use rustix::{buffer, fs, io};
+
+type Path = typed_path::Path<typed_path::UnixEncoding>;
+type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
 
 use crate::ipc::Animation;
 use crate::ipc::PixelFormat;
@@ -43,33 +43,27 @@ impl<'a> CacheEntry<'a> {
         }
     }
 
-    fn parse_file<'b>(output_name: &str, data: &'b [u8]) -> io::Result<Vec<CacheEntry<'b>>> {
-        use std::io::Error;
-
+    fn parse_file<'b>(output_name: &str, data: &'b [u8]) -> Result<Vec<CacheEntry<'b>>, String> {
         let mut v = Vec::new();
         let mut strings = data.split(|ch| *ch == 0);
         while let Some(namespace) = strings.next() {
             let resize = strings.next().ok_or_else(|| {
-                Error::other(format!(
-                    "cache file for output {output_name} is in the wrong format (no resize)"
-                ))
+                format!("cache file for output {output_name} is in the wrong format (no resize)")
             })?;
             let filter = strings.next().ok_or_else(|| {
-                Error::other(format!(
-                    "cache file for output {output_name} is in the wrong format (no filter)"
-                ))
+                format!("cache file for output {output_name} is in the wrong format (no filter)")
             })?;
             let img_path = strings.next().ok_or_else(|| {
-                Error::other(format!(
+                format!(
                     "cache file for output {output_name} is in the wrong format (no image path)"
-                ))
+                )
             })?;
 
             let err = format!("cache file for output {output_name} is not valid utf8");
-            let namespace = str::from_utf8(namespace).map_err(|_| Error::other(err.clone()))?;
-            let resize = str::from_utf8(resize).map_err(|_| Error::other(err.clone()))?;
-            let filter = str::from_utf8(filter).map_err(|_| Error::other(err.clone()))?;
-            let img_path = str::from_utf8(img_path).map_err(|_| Error::other(err))?;
+            let namespace = str::from_utf8(namespace).map_err(|_| err.clone())?;
+            let resize = str::from_utf8(resize).map_err(|_| err.clone())?;
+            let filter = str::from_utf8(filter).map_err(|_| err.clone())?;
+            let img_path = str::from_utf8(img_path).map_err(|_| err)?;
 
             v.push(CacheEntry {
                 namespace,
@@ -83,20 +77,16 @@ impl<'a> CacheEntry<'a> {
     }
 
     pub(crate) fn store(self, output_name: &str) -> io::Result<()> {
-        use std::io::Seek;
-
         let mut filepath = cache_dir()?;
         filepath.push(output_name);
 
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create(true)
-            .truncate(false)
-            .open(filepath)?;
+        let file = fs::open(
+            filepath.as_bytes(),
+            fs::OFlags::RWMODE.union(fs::OFlags::CREATE),
+            fs::Mode::RUSR.union(fs::Mode::WUSR),
+        )?;
 
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
+        let data = read_all(&file)?;
         let mut entries = Self::parse_file(output_name, &data).unwrap_or_else(|_| Vec::new());
 
         if let Some(entry) = entries
@@ -110,7 +100,8 @@ impl<'a> CacheEntry<'a> {
             entries.push(self);
         }
 
-        file.seek(std::io::SeekFrom::Start(0))?;
+        fs::seek(&file, fs::SeekFrom::Start(0))?;
+        let mut len = 0;
         for entry in entries {
             let CacheEntry {
                 namespace,
@@ -118,34 +109,42 @@ impl<'a> CacheEntry<'a> {
                 filter,
                 img_path,
             } = entry;
-            file.write_all(format!("{namespace}\0{resize}\0{filter}\0{img_path}").as_bytes())?;
+            len += write_all(
+                &file,
+                format!("{namespace}\0{resize}\0{filter}\0{img_path}").as_bytes(),
+            )?;
         }
 
-        let len = file.stream_position().unwrap_or(0);
-        file.set_len(len)?;
+        fs::ftruncate(file, len as u64)?;
         Ok(())
     }
 }
 
-pub(crate) fn store_animation_frames<P: AsRef<Path>>(
+pub(crate) fn store_animation_frames<P: Arg + Copy>(
     animation: &[u8],
-    path: &P,
+    path: P,
     dimensions: (u32, u32),
     resize: &str,
     pixel_format: PixelFormat,
 ) -> io::Result<()> {
-    let filename = animation_filename(path, dimensions, resize, pixel_format);
+    let filename = animation_filename(&path, dimensions, resize, pixel_format);
     let mut filepath = cache_dir()?;
     filepath.push(&filename);
 
-    if filepath.is_file() {
+    if fs::access(path, fs::Access::EXISTS).is_ok() {
         Ok(())
     } else {
-        File::create(filepath)?.write_all(animation)
+        let file = fs::open(
+            path,
+            fs::OFlags::WRONLY.union(fs::OFlags::CREATE),
+            fs::Mode::WUSR,
+        )?;
+        write_all(&file, animation)?;
+        Ok(())
     }
 }
 
-pub fn load_animation_frames<P: AsRef<Path>>(
+pub fn load_animation_frames<P: Arg>(
     path: &P,
     dimensions: (u32, u32),
     resize: &str,
@@ -153,14 +152,18 @@ pub fn load_animation_frames<P: AsRef<Path>>(
 ) -> io::Result<Option<Animation>> {
     let filename = animation_filename(path, dimensions, resize, pixel_format);
     let cache_dir = cache_dir()?;
-    let mut filepath = cache_dir.clone();
-    filepath.push(filename);
 
-    let read_dir = cache_dir.read_dir()?;
+    let dir = fs::Dir::new(fs::open(
+        cache_dir.as_bytes(),
+        fs::OFlags::RDONLY,
+        fs::Mode::RUSR,
+    )?)?;
 
-    for entry in read_dir.into_iter().flatten() {
-        if entry.path() == filepath {
-            let fd = File::open(&filepath)?.into();
+    let mut filepath = cache_dir;
+    filepath.push(&filename);
+    for entry in dir.into_iter().flatten() {
+        if entry.file_name().to_bytes() == filename.as_bytes() {
+            let fd = fs::open(filepath.as_bytes(), fs::OFlags::RDONLY, fs::Mode::RUSR)?;
             let len = rustix::fs::seek(&fd, rustix::fs::SeekFrom::End(0))?;
             let mmap = Mmap::from_fd(fd, len as usize);
 
@@ -177,16 +180,17 @@ pub fn read_cache_file(output_name: &str) -> io::Result<CacheData> {
     clean_previous_versions();
 
     let mut filepath = cache_dir()?;
-
     filepath.push(output_name);
-    Ok(CacheData(std::fs::read(filepath)?))
+
+    let file = fs::open(filepath.as_bytes(), fs::OFlags::RDONLY, fs::Mode::RUSR)?;
+    Ok(CacheData(read_all(&file)?))
 }
 
 pub fn get_previous_image_cache<'a>(
     output_name: &str,
     namespace: &str,
     cache_data: &'a CacheData,
-) -> io::Result<Option<CacheEntry<'a>>> {
+) -> Result<Option<CacheEntry<'a>>, String> {
     let entries = CacheEntry::parse_file(output_name, &cache_data.0)?;
 
     Ok(entries
@@ -196,7 +200,7 @@ pub fn get_previous_image_cache<'a>(
 
 pub fn clean() -> io::Result<()> {
     clean_previous_versions();
-    std::fs::remove_dir_all(cache_dir()?)
+    remove_dir_all(cache_dir()?.as_bytes())
 }
 
 fn clean_previous_versions() {
@@ -208,41 +212,71 @@ fn clean_previous_versions() {
         }
     };
 
-    let mut read_dir = match std::fs::read_dir(&user_cache) {
-        Ok(read_dir) => read_dir,
-        Err(_) => {
-            log::warn!("failed to read cache dir {} entries", user_cache.display());
+    let dir_fd = match fs::open(
+        user_cache.as_bytes(),
+        fs::OFlags::RDONLY,
+        fs::Mode::RUSR.union(fs::Mode::WUSR),
+    ) {
+        Ok(fd) => fd,
+        Err(e) => {
+            log::warn!("failed to open cache dir at {}: {e}", user_cache.display());
             return;
         }
     };
 
-    while let Some(Ok(entry)) = read_dir.next() {
-        let entryname = entry.file_name();
-        if entryname == CACHE_DIRNAME {
-            continue;
+    let dir = match fs::Dir::new(dir_fd) {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::warn!("failed to read cache dir at {}: {e}", user_cache.display());
+            return;
         }
+    };
 
-        if entry.path().is_dir() {
-            if let Err(e) = std::fs::remove_dir_all(entry.path()) {
-                log::warn!(
-                    "failed to remove old cache directory {}: {e}",
-                    entryname.display()
-                );
+    for entry in dir.into_iter().flatten() {
+        let name = entry.file_name().to_bytes();
+        const CACHE_DIRNAME_BYTES: &[u8] = CACHE_DIRNAME.as_bytes();
+        match name {
+            b"." | b".." | CACHE_DIRNAME_BYTES => continue,
+            otherwise => {
+                let mut fullpath = user_cache.clone();
+                fullpath.push(otherwise);
+                let stat = match fs::stat(fullpath.as_bytes()) {
+                    Ok(stat) => stat,
+                    Err(e) => {
+                        log::warn!("failed to stat cache entry {}: {e}", fullpath.display());
+                        continue;
+                    }
+                };
+                if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
+                    if let Err(e) = remove_dir_all(fullpath.as_bytes()) {
+                        log::warn!(
+                            "failed to remove cache directory {}: {e}",
+                            fullpath.display()
+                        );
+                        continue;
+                    }
+                    if let Err(e) = fs::rmdir(fullpath.as_bytes()) {
+                        log::warn!(
+                            "failed to remove cache directory {}: {e}",
+                            fullpath.display()
+                        );
+                        continue;
+                    }
+                } else {
+                    if let Err(e) = fs::unlink(fullpath.as_bytes()) {
+                        log::warn!("failed to remove cache file {}: {e}", fullpath.display());
+                        continue;
+                    }
+                }
             }
-        } else if let Err(e) = std::fs::remove_file(entry.path()) {
-            log::warn!(
-                "failed to remove old cache directory {}: {e}",
-                entryname.display()
-            );
         }
     }
 }
 
 fn create_dir(p: &Path) -> io::Result<()> {
-    if p.is_dir() {
-        Ok(())
-    } else {
-        std::fs::create_dir(p)
+    match fs::access(p.as_bytes(), fs::Access::EXISTS) {
+        Ok(()) => Ok(()),
+        Err(_) => fs::mkdir(p.as_bytes(), fs::Mode::RUSR.union(fs::Mode::WUSR)),
     }
 }
 
@@ -257,9 +291,7 @@ fn user_cache_dir() -> io::Result<PathBuf> {
         path.push("awww");
         Ok(path)
     } else {
-        Err(std::io::Error::other(
-            "failed to read both $XDG_CACHE_HOME and $HOME environment variables",
-        ))
+        Err(io::Errno::NODATA)
     }
 }
 
@@ -272,7 +304,7 @@ fn cache_dir() -> io::Result<PathBuf> {
 }
 
 #[must_use]
-fn animation_filename<P: AsRef<Path>>(
+fn animation_filename<P: Arg>(
     path: &P,
     dimensions: (u32, u32),
     resize: &str,
@@ -280,11 +312,66 @@ fn animation_filename<P: AsRef<Path>>(
 ) -> PathBuf {
     format!(
         "{}__{}x{}_{}_{:?}",
-        path.as_ref().display().to_string().replace('/', "_"),
+        path.to_string_lossy().replace('/', "_"),
         dimensions.0,
         dimensions.1,
         resize,
         pixel_format,
     )
     .into()
+}
+
+fn write_all(file: &rustix::fd::OwnedFd, buf: &[u8]) -> io::Result<usize> {
+    let mut i = 0;
+    while i < buf.len() {
+        i += io::write(file, &buf[i..])?;
+    }
+    Ok(i)
+}
+
+fn read_all(file: &rustix::fd::OwnedFd) -> io::Result<Vec<u8>> {
+    let mut data = Vec::with_capacity(128);
+
+    loop {
+        match io::read(&file, buffer::spare_capacity(&mut data))? {
+            0 => break,
+            _ => {
+                if data.len() == data.capacity() {
+                    data.reserve(data.len());
+                }
+            }
+        }
+    }
+    Ok(data)
+}
+
+fn remove_dir_all(dir: &[u8]) -> io::Result<()> {
+    let base = PathBuf::from(dir);
+
+    let dir = fs::Dir::new(fs::open(
+        dir,
+        fs::OFlags::RDONLY,
+        fs::Mode::RUSR.union(fs::Mode::WUSR),
+    )?)?;
+
+    for entry in dir.into_iter().flatten() {
+        let name = entry.file_name().to_bytes();
+
+        match name {
+            b"." | b".." => continue,
+            otherwise => {
+                let mut fullpath = base.clone();
+                fullpath.push(otherwise);
+                let stat = fs::stat(fullpath.as_bytes())?;
+                if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
+                    remove_dir_all(fullpath.as_bytes())?;
+                    fs::rmdir(fullpath.as_bytes())?;
+                } else {
+                    fs::unlink(fullpath.as_bytes())?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

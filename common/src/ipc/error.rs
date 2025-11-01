@@ -1,8 +1,9 @@
 use core::error::Error;
 use core::fmt;
-use std::path::PathBuf;
 
 use rustix::io::Errno;
+
+type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
 
 /// Failures if IPC with added context
 #[derive(Debug)]
