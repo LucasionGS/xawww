@@ -612,9 +612,16 @@ enum WaylandObject {
     FractionalScale,
 }
 
-fn main() -> Result<(), Box<dyn core::error::Error>> {
+fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
     // first, get the command line arguments and make the logger
-    let cli = cli::Cli::new();
+    let cli = match cli::Cli::new() {
+        Ok(Some(cli)) => cli,
+        Ok(None) => return Ok(std::process::ExitCode::SUCCESS),
+        Err(e) => {
+            eprintln!("{e}");
+            return Ok(std::process::ExitCode::FAILURE);
+        }
+    };
     make_logger(cli.quiet);
 
     // next, initialize all wayland stuff
@@ -746,7 +753,7 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
     drop(daemon);
     drop(listener);
     info!("Goodbye!");
-    Ok(())
+    Ok(std::process::ExitCode::SUCCESS)
 }
 
 fn setup_signals() {

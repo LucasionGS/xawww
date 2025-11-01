@@ -10,7 +10,7 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Option<Self>, CliError> {
         let mut quiet = false;
         let mut no_cache = false;
         let mut format = None;
@@ -33,30 +33,19 @@ impl Cli {
                     Some("abgr") => format = Some(PixelFormat::Abgr),
                     Some("rgb") => format = Some(PixelFormat::Rgb),
                     Some("bgr") => format = Some(PixelFormat::Bgr),
-                    _ => {
-                        eprintln!(
-                            "`--format` command line option must be one of: 'argb', 'abgr', 'rgb' or 'bgr'"
-                        );
-                        std::process::exit(-2);
-                    }
+                    None => return Err(CliError::AbsentFormat),
+                    Some(other) => return Err(CliError::UnrecognizedFormat(other.to_string())),
                 },
                 "-l" | "--layer" => match args.next().as_deref() {
                     Some("background") => layer = Layer::background,
                     Some("bottom") => layer = Layer::bottom,
-                    _ => {
-                        eprintln!(
-                            "`--layer` command line option must be one of: 'background', 'bottom'"
-                        );
-                        std::process::exit(-3);
-                    }
+                    None => return Err(CliError::AbsentLayer),
+                    Some(other) => return Err(CliError::UnrecognizedLayer(other.to_string())),
                 },
                 "-n" | "--namespace" => {
                     namespace = match args.next() {
                         Some(s) => s,
-                        None => {
-                            eprintln!("expected argument for option `--namespace`");
-                            std::process::exit(-4);
-                        }
+                        None => return Err(CliError::AbsentNamespace),
                     }
                 }
                 "--no-cache" => no_cache = true,
@@ -105,26 +94,56 @@ Options:
     -h|--help     print help
     -V|--version  print version"
                     );
-                    std::process::exit(0);
+                    return Ok(None);
                 }
                 "-V" | "--version" => {
                     println!("awww-daemon {}", env!("CARGO_PKG_VERSION"));
-                    std::process::exit(0);
+                    return Ok(None);
                 }
-                s => {
-                    eprintln!("Unrecognized command line argument: {s}");
-                    eprintln!("Run -h|--help to know what arguments are recognized!");
-                    std::process::exit(-1);
-                }
+                other => return Err(CliError::UnrecognizedArgument(other.to_string())),
             }
         }
 
-        Self {
+        Ok(Some(Self {
             format,
             quiet,
             no_cache,
             layer,
             namespace,
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub enum CliError {
+    AbsentFormat,
+    UnrecognizedFormat(String),
+    AbsentLayer,
+    UnrecognizedLayer(String),
+    AbsentNamespace,
+    UnrecognizedArgument(String),
+}
+
+impl core::fmt::Display for CliError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CliError::AbsentFormat => f.write_str("format was not provided"),
+            CliError::UnrecognizedFormat(format) => f.write_fmt(format_args!(
+                "`--format` command line option must be one of: 'argb', 'abgr', 'rgb' or 'bgr'\n\
+                Found: '{format}'"
+            )),
+            CliError::AbsentLayer => f.write_str("layer was not provided"),
+            CliError::UnrecognizedLayer(layer) => f.write_fmt(format_args!(
+                "`--layer` command line option must be one of: 'background', 'bottom'\n\
+                Found: '{layer}'"
+            )),
+            CliError::AbsentNamespace => f.write_str("namespace was not provided"),
+            CliError::UnrecognizedArgument(arg) => f.write_fmt(format_args!(
+                "Unrecognized command line argument: {arg}\n\
+                Run -h|--help to know what arguments are recognized!",
+            )),
         }
     }
 }
+
+impl core::error::Error for CliError {}
