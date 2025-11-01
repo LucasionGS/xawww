@@ -1,5 +1,5 @@
 {
-  description = "awww, A Solution to your Wayland Wallpaper Woes";
+  description = "awww, An Answer to your Wayland Wallpaper Woes";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
