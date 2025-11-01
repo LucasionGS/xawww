@@ -286,7 +286,7 @@ impl BgInfo {
     }
 
     pub(super) fn deserialize(bytes: &[u8]) -> (Self, usize) {
-        let name = deserialize_boxed_std(bytes);
+        let name = deserialize_boxed_str(bytes);
         let mut i = name.len() + 4;
 
         assert!(bytes.len() > i + 17);
@@ -323,7 +323,7 @@ impl BgInfo {
             BgImg::Color([bytes[i - 4], bytes[i - 3], bytes[i - 2], bytes[i - 1]])
         } else {
             i += 1;
-            let path = deserialize_boxed_std(&bytes[i..]);
+            let path = deserialize_boxed_str(&bytes[i..]);
             i += 4 + path.len();
             BgImg::Img(path)
         };
@@ -648,7 +648,7 @@ pub struct ImageReq {
     pub animations: Option<Vec<Animation>>,
 }
 
-fn deserialize_boxed_std(bytes: &[u8]) -> Box<str> {
+fn deserialize_boxed_str(bytes: &[u8]) -> Box<str> {
     let size = u32::from_ne_bytes(bytes[0..4].try_into().unwrap()) as usize;
     core::str::from_utf8(&bytes[4..4 + size])
         .expect("received a non utf8 string from socket")
