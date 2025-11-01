@@ -1,6 +1,5 @@
 use core::time::Duration;
 use std::env;
-use std::sync::OnceLock;
 
 use rustix::fd::OwnedFd;
 use rustix::fs;
@@ -9,12 +8,24 @@ use rustix::net;
 use rustix::time::Timespec;
 
 type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
+type Path = typed_path::Path<typed_path::UnixEncoding>;
 
 use super::ErrnoExt;
 use super::IpcError;
 use super::IpcErrorKind;
 
-static SOCKET_PATH: OnceLock<PathBuf> = OnceLock::new();
+fn get_socket_path_or_init() -> &'static Path {
+    static mut SOCKET_PATH: &[u8] = &[];
+    static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+    if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
+        unsafe {
+            SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_vec().into_boxed_slice())
+        };
+    }
+
+    Path::new(unsafe { SOCKET_PATH })
+}
 
 pub struct IpcSocket {
     fd: OwnedFd,
@@ -72,14 +83,14 @@ impl IpcSocket {
     /// [`Client`] or [`Server`] are recommended.
     #[must_use]
     pub fn path(namespace: &str) -> PathBuf {
-        let mut p = SOCKET_PATH.get_or_init(Self::socket_file).clone();
+        let mut p = get_socket_path_or_init().to_path_buf();
         p.set_extension(format!("{namespace}.sock"));
         p
     }
 
     /// Retrieves all currently in-use namespaces
     pub fn all_namespaces() -> std::io::Result<Vec<String>> {
-        let p = SOCKET_PATH.get_or_init(Self::socket_file).clone();
+        let p = get_socket_path_or_init();
         let parent = match p.parent() {
             Some(parent) => parent,
             None => return Ok(Vec::new()),
