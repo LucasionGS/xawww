@@ -1,18 +1,36 @@
-name: update-dependencies
-on:
-  schedule:
-    - cron: '0 0 1 * *' # Run monthly
+when:
+  - event: cron
+    cron: "update dependencies"
 
-env:
-  CARGO_TERM_COLOR: always
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
+steps:
+  update:
+    image: rust
+    commands:
+      - export REPO_URL="https://$${CI_REPO_OWNER}:$${TOKEN}@codeberg.org/$${CI_REPO_OWNER}/$${CI_REPO_NAME}.git"
+      - git config --global user.email "woodpecker-ci@noreply.org"
+      - git config --global user.name "Woodpecker-CI"
+      - git remote set-url origin "$${REPO_URL}"
+      - cargo update
+      - if git status | grep -q modified; then git add . && git commit -m "Update dependencies" && git push --force origin main:update-dependencies; fi
+    environment:
+      TOKEN:
+        from_secret: token
 
-jobs:
-  cargo_update:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: moonrepo/setup-rust@v1
-      - run: cargo update
-      - uses: peter-evans/create-pull-request@v7
+  create-pr:
+    image: rust
+    pull: true
+    settings:
+      gitea_address: https://codeberg.org
+      gitea_token:
+        from_secret: token
+      owner: ${CI_REPO_OWNER}
+      repo: ${CI_REPO_NAME}
+      branch: update-dependencies
+      base_branch: main
+      pr_title: Update dependencies
+      pr_body: PR automatically created by Woodpecker CI
+      skip_on_missing_branch: true
+      close_pr_if_empty: true
+      delete_branch_if_pr_empty: true
+      merge_when_checks_succeed: true
+      delete_branch_after_merge: true
