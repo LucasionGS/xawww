@@ -8,13 +8,13 @@ use crate::mmap::MmappedStr;
 
 use super::ImageRequestBuilder;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Coord {
     Pixel(f32),
     Percent(f32),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Position {
     pub x: Coord,
     pub y: Coord,
@@ -360,7 +360,7 @@ impl fmt::Display for BgInfo {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum TransitionType {
     Simple = 0,
     Fade = 1,
@@ -371,6 +371,7 @@ pub enum TransitionType {
     None = 6,
 }
 
+#[derive(Debug)]
 pub struct Transition {
     pub transition_type: TransitionType,
     pub duration: f32,

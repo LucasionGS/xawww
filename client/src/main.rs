@@ -508,10 +508,21 @@ impl log::Log for Logger {
 }
 
 fn make_logger() {
+    let level_filter = {
+        #[cfg(not(debug_assertions))]
+        {
+            log::LevelFilter::Error
+        }
+        #[cfg(debug_assertions)]
+        {
+            log::LevelFilter::Debug
+        }
+    };
+
     log::set_boxed_logger(Box::new(Logger {
-        level_filter: log::LevelFilter::Warn,
+        level_filter,
         is_term: rustix::termios::isatty(rustix::stdio::stderr()),
     }))
-    .map(|()| log::set_max_level(log::LevelFilter::Warn))
+    .map(|()| log::set_max_level(level_filter))
     .unwrap();
 }

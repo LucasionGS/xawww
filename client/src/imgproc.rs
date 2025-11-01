@@ -576,6 +576,7 @@ pub fn img_resize_crop(
 
 pub fn make_transition(img: &cli::Img) -> ipc::Transition {
     let mut angle = img.transition_angle;
+    let mut wave = img.transition_wave;
     let step = img.transition_step;
 
     let x = match img.transition_pos.x {
@@ -649,9 +650,11 @@ pub fn make_transition(img: &cli::Img) -> ipc::Transition {
                 Coord::Percent(fastrand::f32()),
             );
             angle = fastrand::f64() * 360.0;
+            wave = (fastrand::f32() * 100.0, fastrand::f32() * 100.0);
+
             match fastrand::u8(0..4) {
-                0 => ipc::TransitionType::Simple,
-                1 => ipc::TransitionType::Wipe,
+                0 => ipc::TransitionType::Fade,
+                1 => ipc::TransitionType::Wave,
                 2 => ipc::TransitionType::Outer,
                 3 => ipc::TransitionType::Grow,
                 _ => unreachable!(),
@@ -659,7 +662,7 @@ pub fn make_transition(img: &cli::Img) -> ipc::Transition {
         }
     };
 
-    ipc::Transition {
+    let transition = ipc::Transition {
         duration: img.transition_duration,
         step,
         fps: img.transition_fps,
@@ -667,7 +670,10 @@ pub fn make_transition(img: &cli::Img) -> ipc::Transition {
         angle,
         pos,
         transition_type,
-        wave: img.transition_wave,
+        wave,
         invert_y: img.invert_y,
-    }
+    };
+
+    log::debug!("transition: {transition:#?}");
+    transition
 }
