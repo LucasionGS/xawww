@@ -262,11 +262,9 @@ fn clean_previous_versions() {
                         );
                         continue;
                     }
-                } else {
-                    if let Err(e) = fs::unlink(fullpath.as_bytes()) {
-                        log::warn!("failed to remove cache file {}: {e}", fullpath.display());
-                        continue;
-                    }
+                } else if let Err(e) = fs::unlink(fullpath.as_bytes()) {
+                    log::warn!("failed to remove cache file {}: {e}", fullpath.display());
+                    continue;
                 }
             }
         }
@@ -333,7 +331,7 @@ fn read_all(file: &rustix::fd::OwnedFd) -> io::Result<Vec<u8>> {
     let mut data = Vec::with_capacity(128);
 
     loop {
-        match io::read(&file, buffer::spare_capacity(&mut data))? {
+        match io::read(file, buffer::spare_capacity(&mut data))? {
             0 => break,
             _ => {
                 if data.len() == data.capacity() {

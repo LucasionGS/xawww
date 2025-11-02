@@ -107,7 +107,7 @@ impl ImageRequestBuilder {
             && path != "-"
             && let Err(e) = cache::store_animation_frames(
                 &self.memory.slice()[animation_start..],
-                &path,
+                path.as_str(),
                 *dims,
                 resize,
                 *format,

@@ -89,7 +89,7 @@ impl IpcSocket {
     }
 
     /// Retrieves all currently in-use namespaces
-    pub fn all_namespaces() -> std::io::Result<Vec<String>> {
+    pub fn all_namespaces() -> rustix::io::Result<Vec<String>> {
         let p = get_socket_path_or_init();
         let parent = match p.parent() {
             Some(parent) => parent,
@@ -104,11 +104,7 @@ impl IpcSocket {
                 f.push(b'.');
                 f
             }
-            None => {
-                return Err(std::io::Error::other(
-                    "socket path has invalid final component",
-                ));
-            }
+            None => return Err(Errno::NOENT),
         };
 
         let dir = fs::Dir::new(fs::open(
@@ -180,7 +176,7 @@ impl IpcSocket {
             let _ = rustix::thread::nanosleep(&INTERVAL);
         }
 
-        let kind = if error.kind() == std::io::ErrorKind::NotFound {
+        let kind = if error == Errno::NOENT {
             IpcErrorKind::NoSocketFile(path)
         } else {
             IpcErrorKind::Connect

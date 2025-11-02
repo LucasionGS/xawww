@@ -1,4 +1,3 @@
-use core::error::Error;
 use core::fmt;
 
 use rustix::io::Errno;
@@ -8,6 +7,7 @@ type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
 /// Failures if IPC with added context
 #[derive(Debug)]
 pub struct IpcError {
+    #[allow(unused)]
     err: Errno,
     kind: IpcErrorKind,
 }
@@ -68,8 +68,8 @@ impl fmt::Display for IpcError {
     }
 }
 
-impl Error for IpcError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+impl core::error::Error for IpcError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.err)
     }
 }
