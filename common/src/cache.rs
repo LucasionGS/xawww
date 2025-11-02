@@ -4,6 +4,10 @@
 //!   1. the client registers the last image sent for each output in a file
 //!   2. the daemon spawns a client that reloads that image when an output is created
 
+use ::alloc::format;
+use ::alloc::string::String;
+use ::alloc::vec::Vec;
+
 use rustix::path::Arg;
 use rustix::{buffer, fs, io};
 
@@ -279,12 +283,12 @@ fn create_dir(p: &Path) -> io::Result<()> {
 }
 
 fn user_cache_dir() -> io::Result<PathBuf> {
-    if let Ok(path) = std::env::var("XDG_CACHE_HOME") {
-        let mut path: PathBuf = path.into();
+    if let Some(path) = crate::getenv(c"XDG_CACHE_HOME") {
+        let mut path: PathBuf = path.to_bytes().into();
         path.push("awww");
         Ok(path)
-    } else if let Ok(path) = std::env::var("HOME") {
-        let mut path: PathBuf = path.into();
+    } else if let Some(path) = crate::getenv(c"HOME") {
+        let mut path: PathBuf = path.to_bytes().into();
         path.push(".cache");
         path.push("awww");
         Ok(path)

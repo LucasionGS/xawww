@@ -1,5 +1,9 @@
+use ::alloc::boxed::Box;
+use ::alloc::format;
+use ::alloc::string::{String, ToString};
+use ::alloc::vec::Vec;
+
 use core::time::Duration;
-use std::env;
 
 use rustix::fd::OwnedFd;
 use rustix::fs;
@@ -19,9 +23,7 @@ fn get_socket_path_or_init() -> &'static Path {
     static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
     if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
-        unsafe {
-            SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_vec().into_boxed_slice())
-        };
+        unsafe { SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_vec().into_boxed_slice()) };
     }
 
     Path::new(unsafe { SOCKET_PATH })
@@ -37,9 +39,7 @@ impl IpcSocket {
     /// TODO: remove external ability to construct [`Self`] from random file descriptors
     #[must_use]
     pub fn new(fd: OwnedFd) -> Self {
-        Self {
-            fd,
-        }
+        Self { fd }
     }
 
     #[must_use]
@@ -48,26 +48,22 @@ impl IpcSocket {
     }
 
     fn socket_file() -> PathBuf {
-        let mut runtime = env::var("XDG_RUNTIME_DIR").map_or_else(
-            |_| {
+        let mut runtime: PathBuf = crate::getenv(c"XDG_RUNTIME_DIR").map_or_else(
+            || {
                 let mut p = PathBuf::from_iter(&["run", "user"]);
                 let uid = rustix::process::getuid();
                 p.push(format!("{}", uid.as_raw()));
                 p
             },
-            PathBuf::from,
+            |value| value.to_bytes().into(),
         );
 
-        let display = if let Ok(wayland_socket) = std::env::var("WAYLAND_DISPLAY") {
-            let mut i = 0;
-            // if WAYLAND_DISPLAY is a full path, use only its final component
-            for (j, ch) in wayland_socket.bytes().enumerate().rev() {
-                if ch == b'/' {
-                    i = j + 1;
-                    break;
-                }
+        let display = if let Some(wayland_socket) = crate::getenv(c"WAYLAND_DISPLAY") {
+            let mut path = Path::new(wayland_socket.to_bytes());
+            if let Some(final_component) = path.file_name() {
+                path = Path::new(final_component);
             }
-            format!("{}-awww-daemon", &wayland_socket[i..])
+            ::alloc::format!("{}-awww-daemon", path.display())
         } else {
             log::warn!("WAYLAND_DISPLAY variable not set. Defaulting to wayland-0");
             "wayland-0-awww-daemon".to_string()

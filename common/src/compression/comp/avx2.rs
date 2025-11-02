@@ -1,3 +1,5 @@
+use ::alloc::vec::Vec;
+
 /// # Safety
 ///
 /// s1.len() must be equal to s2.len()
@@ -110,6 +112,9 @@ pub(crate) unsafe fn pack_bytes(cur: &[u8], goal: &[u8], v: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+    use std::is_x86_feature_detected;
+
     use super::*;
     use crate::compression::decomp::unpack_bytes_4channels;
 

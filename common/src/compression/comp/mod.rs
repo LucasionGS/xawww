@@ -16,6 +16,8 @@
 //! The default implementation lies in this file. Architecture-specific implementations
 //! that make use of specialized instructions lie in other submodules.
 
+use ::alloc::vec::Vec;
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) mod sse2;
 

@@ -177,6 +177,9 @@ unsafe fn verify_copy<const CHANNELS: usize>(
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+    use std::vec;
+
     use super::*;
 
     #[test]

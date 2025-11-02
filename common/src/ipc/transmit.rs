@@ -1,3 +1,5 @@
+use ::alloc::vec::Vec;
+
 use core::mem::MaybeUninit;
 
 use rustix::io;

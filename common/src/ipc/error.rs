@@ -1,3 +1,6 @@
+use ::alloc::format;
+use ::alloc::string::{String, ToString};
+
 use core::fmt;
 
 use rustix::io::Errno;
@@ -65,12 +68,6 @@ impl IpcErrorKind {
 impl fmt::Display for IpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.kind.description())
-    }
-}
-
-impl core::error::Error for IpcError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        Some(&self.err)
     }
 }
 

@@ -68,7 +68,7 @@ impl Mmap {
         const FLAGS: OFlags = OFlags::CREATE.union(OFlags::EXCL).union(OFlags::RDWR);
         const MODE: Mode = Mode::RUSR.union(Mode::WUSR);
 
-        let mut write_buf = Vec::from(PREFIX);
+        let mut write_buf = ::alloc::vec::Vec::from(PREFIX);
 
         loop {
             let filename = {

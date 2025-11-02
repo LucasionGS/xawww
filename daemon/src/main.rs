@@ -681,7 +681,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         match rustix::event::poll(&mut fds, daemon.poll_time.as_ref()) {
             Ok(_) => (),
             Err(rustix::io::Errno::INTR | rustix::io::Errno::WOULDBLOCK) => continue,
-            Err(e) => return Err(Box::new(e)),
+            Err(e) => panic!("{e}"),
         }
 
         let wayland_event = !fds[0].revents().is_empty();
@@ -736,7 +736,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
             match rustix::net::accept(&listener.fd) {
                 Ok(stream) => daemon.recv_socket_msg(IpcSocket::new(stream)),
                 Err(rustix::io::Errno::INTR | rustix::io::Errno::WOULDBLOCK) => continue,
-                Err(e) => return Err(Box::new(e)),
+                Err(e) => panic!("{e}"),
             }
         }
 
@@ -800,7 +800,7 @@ impl SocketWrapper {
         use rustix::fs;
         let addr = IpcSocket::path(namespace);
 
-        if fs::access(&addr, fs::Access::EXISTS).is_ok() {
+        if fs::access(addr.as_bytes(), fs::Access::EXISTS).is_ok() {
             if is_daemon_running(namespace)? {
                 return Err(
                     "There is an awww-daemon instance already running on this socket!".to_string(),
@@ -810,7 +810,7 @@ impl SocketWrapper {
                 "socket file {} was not deleted when the previous daemon exited",
                 addr.display()
             );
-            if let Err(e) = fs::unlink(&addr) {
+            if let Err(e) = fs::unlink(addr.as_bytes()) {
                 return Err(format!("failed to delete previous socket: {e}"));
             }
         }
@@ -820,8 +820,8 @@ impl SocketWrapper {
             None => return Err("couldn't find a valid runtime directory".to_owned()),
         };
 
-        if fs::access(runtime_dir, fs::Access::EXISTS).is_err() {
-            match fs::mkdir(runtime_dir, fs::Mode::RUSR.union(fs::Mode::WUSR)) {
+        if fs::access(runtime_dir.as_bytes(), fs::Access::EXISTS).is_err() {
+            match fs::mkdir(runtime_dir.as_bytes(), fs::Mode::RUSR.union(fs::Mode::WUSR)) {
                 Ok(()) => (),
                 Err(e) => return Err(format!("failed to create runtime dir: {e}")),
             }
@@ -840,7 +840,7 @@ impl SocketWrapper {
 impl Drop for SocketWrapper {
     fn drop(&mut self) {
         let addr = IpcSocket::path(&self.namespace);
-        if let Err(e) = rustix::fs::unlink(&addr) {
+        if let Err(e) = rustix::fs::unlink(addr.as_bytes()) {
             error!("Failed to remove socket at {}: {e}", addr.display());
         }
         info!("Removed socket at {}", addr.display());
@@ -883,7 +883,7 @@ impl log::Log for Logger {
                 None => std::borrow::Cow::Owned(msg.to_string()),
             };
 
-            let stderr = rustix::stdio::stderr();
+            let stderr = unsafe { rustix::stdio::stderr() };
             let bufs = [
                 rustix::io::IoSlice::new(level.as_bytes()),
                 rustix::io::IoSlice::new(b" "),
@@ -906,10 +906,11 @@ fn make_logger(quiet: bool) {
         LevelFilter::Debug
     };
 
-    log::set_boxed_logger(Box::new(Logger {
+    let stderr = unsafe { rustix::stdio::stderr() };
+    log::set_logger(Box::leak(Box::new(Logger {
         level_filter,
-        is_term: rustix::termios::isatty(rustix::stdio::stderr()),
-    }))
+        is_term: rustix::termios::isatty(stderr),
+    })))
     .map(|()| log::set_max_level(level_filter))
     .unwrap();
 }
