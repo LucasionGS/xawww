@@ -1,0 +1,36 @@
+when:
+  - event: cron
+    cron: "update flake lock"
+
+steps:
+  update:
+    image: nixos/nix
+    commands:
+      - export REPO_URL="https://$${CI_REPO_OWNER}:$${TOKEN}@codeberg.org/$${CI_REPO_OWNER}/$${CI_REPO_NAME}.git"
+      - git config --global user.email "woodpecker-ci@noreply.org"
+      - git config --global user.name "Woodpecker-CI"
+      - git remote set-url origin "$${REPO_URL}"
+      - nix flake update --extra-experimental-features "flakes nix-command"
+      - if git status | grep -q modified; then git add . && git commit -m "Update flake.nix" && git push --force origin main:update_flake_lock_ci; fi
+    environment:
+      TOKEN:
+        from_secret: token
+
+  create-pr:
+    image: nixos/nix
+    pull: true
+    settings:
+      gitea_address: https://codeberg.org
+      gitea_token:
+        from_secret: token
+      owner: ${CI_REPO_OWNER}
+      repo: ${CI_REPO_NAME}
+      branch: update_flake_lock_ci
+      base_branch: main
+      pr_title: Update flake.lock
+      pr_body: PR automatically created by Woodpecker CI
+      skip_on_missing_branch: true
+      close_pr_if_empty: true
+      delete_branch_if_pr_empty: true
+      merge_when_checks_succeed: true
+      delete_branch_after_merge: true

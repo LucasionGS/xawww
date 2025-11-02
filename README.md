@@ -49,7 +49,7 @@ NixOS users can directly use this repository to get the latest awww for their sy
 Add in your `flake.nix`:
 
 ```nix
-  inputs.awww.url = "github:LGFae/awww";
+  inputs.awww.url = "git+https://codeberg.org/LGFae/awww";
 ```
 
 Pass inputs to your modules using `specialArgs` and
