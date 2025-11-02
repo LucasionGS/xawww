@@ -2,6 +2,8 @@
 //! them fail there is no point in continuing. All of the initialization code, for example, is full
 //! of `expects`, **on purpose**, because we **want** to unwind and exit when they happen
 
+#![no_main]
+
 mod animations;
 mod cli;
 mod output_info;
@@ -601,21 +603,27 @@ enum WaylandObject {
     FractionalScale,
 }
 
-fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+pub extern "C" fn main(
+    argc: core::ffi::c_long,
+    argv: *const *const core::ffi::c_char,
+) -> core::ffi::c_long {
     // first, get the command line arguments and make the logger
-    let cli = match cli::Cli::new() {
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    let cli = match cli::Cli::new(args) {
         Ok(Some(cli)) => cli,
-        Ok(None) => return Ok(std::process::ExitCode::SUCCESS),
+        Ok(None) => return 0,
         Err(e) => {
             eprintln!("{e}");
-            return Ok(std::process::ExitCode::FAILURE);
+            return -1;
         }
     };
     make_logger(cli.quiet);
 
     // next, initialize all wayland stuff
     let (mut backend, mut objman, mut receiver) =
-        waybackend::connect::<WaylandObject>(WaylandObject::Display)?;
+        waybackend::connect::<WaylandObject>(WaylandObject::Display).unwrap();
     let registry = objman.create(WaylandObject::Registry);
     let callback = objman.create(WaylandObject::Callback);
     let mut pending_outputs = Vec::new();
@@ -651,7 +659,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
     // create the socket listener and setup the signal handlers
     // this will also return an error if there is an `awww-daemon` instance already
     // running
-    let listener = SocketWrapper::new(&cli.namespace)?;
+    let listener = SocketWrapper::new(&cli.namespace).unwrap();
     setup_signals();
 
     // use the initializer to create the Daemon, then drop it to free up the memory
@@ -669,7 +677,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         use rustix::event::{PollFd, PollFlags};
         use wayland::*;
 
-        daemon.backend.flush()?;
+        daemon.backend.flush().unwrap();
 
         let mut fds = [
             PollFd::new(&daemon.backend.wayland_fd, PollFlags::IN),
@@ -688,7 +696,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         let socket_event = !fds[1].revents().is_empty();
 
         if wayland_event {
-            let mut msgs = receiver.recv(&daemon.backend.wayland_fd)?;
+            let mut msgs = receiver.recv(&daemon.backend.wayland_fd).unwrap();
             while let Some(sender_id) = msgs.next() {
                 let sender_id = match sender_id {
                     Ok(sender_id) => sender_id,
@@ -748,7 +756,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
     drop(daemon);
     drop(listener);
     info!("Goodbye!");
-    Ok(std::process::ExitCode::SUCCESS)
+    0
 }
 
 fn setup_signals() {
