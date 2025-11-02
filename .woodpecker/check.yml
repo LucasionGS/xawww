@@ -1,0 +1,24 @@
+when:
+  - event: pull_request
+    branch: main
+    path: '/**/*.rs'
+  - event: push
+    branch: main
+    path: '/**/*.rs'
+
+steps:
+  clippy:
+    image: rust
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - sudo apt install -y libwayland-dev wayland-protocols
+      - rustup component add clippy
+      - cargo clippy -j1 --workspace --locked --tests
+  rustfmt:
+    image: rust
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - rustup component add rustfmt
+      - cargo fmt --all --check

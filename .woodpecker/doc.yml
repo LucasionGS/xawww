@@ -1,20 +1,14 @@
-name: Doc
+when:
+  - event: pull_request
+    branch: main
+    path: 'doc/*.scd'
+  - event: push
+    branch: main
+    path: 'doc/*.scd'
 
-on:
-  pull_request:
-    paths:
-      - '**.scd'
-  merge_group:
-  push:
-    branches:
-      - main
-    paths:
-      - '**.scd'
-
-jobs:
-  doc-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: sudo apt install -y scdoc
-      - run: ./doc/gen.sh
+steps:
+  cargo-deny:
+    image: alpine
+    commands:
+      - apk add --no-cache scdoc
+      - ./doc/gen.sh
