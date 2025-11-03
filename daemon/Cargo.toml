@@ -16,7 +16,7 @@ waybackend = { version = "0.8" }
 log = { version = "0.4", default-features = false, features = [ "max_level_trace",
   "release_max_level_info",
 ] }
-rustix = { version = "1.1", default-features = false, features = [ "event", "stdio", "termios" ] }
+rustix = { version = "1.1", default-features = false, features = [ "event", "runtime", "stdio", "termios" ] }
 libc = "0.2"
 keyframe = "1.1"
 sd-notify = { version = "0.4" }

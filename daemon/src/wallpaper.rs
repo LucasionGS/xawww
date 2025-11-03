@@ -290,24 +290,40 @@ impl Wallpaper {
                         // Note: we do not need to wait for this command because we set SIGCHLD to
                         // SIG_IGN, and posix says that does not generate a zombie process (see
                         // `man 3p _EXIT`
-                        let ret = std::process::Command::new("awww")
-                            .arg("img")
-                            .args([
-                                "--outputs",
-                                output_name,
-                                "--resize",
-                                cache.resize,
-                                "--filter",
-                                cache.filter,
-                                // namespace needs a format because the empty namespace is valid, so we need to use the
-                                // `=` format
-                                &format!("--namespace={namespace}"),
-                                "--transition-type=none",
-                                cache.img_path,
-                            ])
-                            .spawn();
-                        if let Err(e) = ret {
-                            error!("failed to spawn child awww process to load the cache: {e}");
+
+                        unsafe extern "C" {
+                            static environ: *const *const core::ffi::c_char;
+                        }
+
+                        let cmd = format!(
+                            "exec awww img \
+                            --outputs='{output_name}' \
+                            --resize={} \
+                            --filter={} \
+                            --namespace='{namespace}' \
+                            --transition-type=none \
+                            '{}'\0",
+                            cache.resize, cache.filter, cache.img_path
+                        );
+                        match unsafe { rustix::runtime::kernel_fork() } {
+                            Ok(rustix::runtime::Fork::Child(_)) => {
+                                let args: [*const u8; 4] = [
+                                    c"sh".as_ptr().cast(),
+                                    c"-c".as_ptr().cast(),
+                                    cmd.as_ptr(),
+                                    core::ptr::null(),
+                                ];
+                                let err = unsafe {
+                                    rustix::runtime::execve(
+                                        c"/bin/sh",
+                                        args.as_ptr(),
+                                        environ as *const _,
+                                    )
+                                };
+                                panic!("execve failed: {err}");
+                            }
+                            Ok(rustix::runtime::Fork::ParentOf(_)) => (),
+                            Err(e) => log::error!("fork failed: {e}"),
                         }
                     }
                     Ok(None) => break 'brk,
