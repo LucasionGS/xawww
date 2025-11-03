@@ -19,7 +19,6 @@ log = { version = "0.4", default-features = false, features = [ "max_level_trace
 rustix = { version = "1.1", default-features = false, features = [ "event", "runtime", "stdio", "termios" ] }
 libc = "0.2"
 keyframe = "1.1"
-sd-notify = { version = "0.4" }
 smallvec  = { version = "1.15", default-features = false, features = [ "union" ] }
 
 [build-dependencies]

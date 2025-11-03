@@ -7,6 +7,7 @@
 mod animations;
 mod cli;
 mod output_info;
+mod systemd;
 mod wallpaper;
 mod wayland;
 use log::{LevelFilter, debug, error, info, trace, warn};
@@ -671,9 +672,7 @@ pub extern "C" fn main(
     // use the initializer to create the Daemon, then drop it to free up the memory
     let mut daemon = Daemon::new(backend, objman, cli, pending_outputs);
 
-    if let Ok(true) = sd_notify::booted()
-        && let Err(e) = sd_notify::notify(true, &[sd_notify::NotifyState::Ready])
-    {
+    if let Err(e) = systemd::notify() {
         error!("Error sending status update to systemd: {e}");
     }
 
