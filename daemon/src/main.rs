@@ -629,8 +629,7 @@ pub extern "C" fn main(
     make_logger(cli.quiet);
 
     // next, initialize all wayland stuff
-    let (mut backend, mut objman, mut receiver) =
-        waybackend::connect::<WaylandObject>(WaylandObject::Display).unwrap();
+    let (mut backend, mut objman, mut receiver) = wayland::connect();
     let registry = objman.create(WaylandObject::Registry);
     let callback = objman.create(WaylandObject::Callback);
     let mut pending_outputs = Vec::new();

@@ -12,7 +12,7 @@ workspace = true
 [dependencies]
 common = { workspace = true }
 
-waybackend = { version = "0.8" }
+waybackend = { version = "0.8", default-features = false }
 log = { version = "0.4", default-features = false, features = [ "max_level_trace",
   "release_max_level_info",
 ] }
