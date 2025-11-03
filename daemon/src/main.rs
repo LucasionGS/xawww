@@ -615,7 +615,13 @@ pub extern "C" fn main(
         Ok(Some(cli)) => cli,
         Ok(None) => return 0,
         Err(e) => {
-            eprintln!("{e}");
+            let stderr = unsafe { rustix::stdio::stderr() };
+            let msg = e.to_string();
+            let bufs = [
+                rustix::io::IoSlice::new(msg.as_bytes()),
+                rustix::io::IoSlice::new(b"\n"),
+            ];
+            _ = rustix::io::writev(stderr, &bufs);
             return -1;
         }
     };

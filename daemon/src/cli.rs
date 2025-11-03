@@ -59,8 +59,7 @@ impl Cli {
                 b"--no-cache" => no_cache = true,
                 b"-q" | b"--quiet" => quiet = true,
                 b"-h" | b"--help" => {
-                    println!(
-                        "\
+                    let msg = b"\
 awww-daemon
 
 Options:
@@ -100,12 +99,19 @@ Options:
 
     -q|--quiet    will only log errors
     -h|--help     print help
-    -V|--version  print version"
-                    );
+    -V|--version  print version\n";
+                    let stdout = unsafe { rustix::stdio::stdout() };
+                    _ = rustix::io::write(stdout, msg);
                     return Ok(None);
                 }
                 b"-V" | b"--version" => {
-                    println!("awww-daemon {}", env!("CARGO_PKG_VERSION"));
+                    let stdout = unsafe { rustix::stdio::stdout() };
+                    let bufs = [
+                        rustix::io::IoSlice::new(b"awww-daemon "),
+                        rustix::io::IoSlice::new(env!("CARGO_PKG_VERSION").as_bytes()),
+                        rustix::io::IoSlice::new(b"\n"),
+                    ];
+                    _ = rustix::io::writev(stdout, &bufs);
                     return Ok(None);
                 }
                 other => {
