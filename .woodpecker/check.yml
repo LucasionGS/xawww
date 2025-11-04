@@ -1,10 +1,10 @@
 when:
   - event: pull_request
     branch: main
-    path: '/**/*.rs'
+    path: './**/*.rs'
   - event: push
     branch: main
-    path: '/**/*.rs'
+    path: './**/*.rs'
 
 steps:
   clippy:
