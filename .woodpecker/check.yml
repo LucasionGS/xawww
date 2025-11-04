@@ -1,6 +1,5 @@
 when:
   - event: pull_request
-    branch: main
     path: './**/*.rs'
   - event: push
     branch: main

@@ -1,6 +1,5 @@
 when:
   - event: pull_request
-    branch: main
     path: 'doc/*.scd'
   - event: push
     branch: main
