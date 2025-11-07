@@ -1,7 +1,7 @@
 awww(1)
 
 # NAME
-awww - A Solution to your Wayland Wallpaper Woes
+awww - An Answer to your Wayland Wallpaper Woes
 
 # SYNOPSIS
 *awww* <COMMAND>

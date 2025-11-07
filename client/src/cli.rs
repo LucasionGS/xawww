@@ -152,7 +152,7 @@ pub enum CliImage {
 
 #[derive(Parser)]
 #[command(version, name = "awww")]
-///A Solution to your Wayland Wallpaper Woes
+///An Answer to your Wayland Wallpaper Woes
 ///
 ///Change what your monitors display as a background by controlling the awww daemon at runtime.
 ///Supports animated gifs and putting different stuff in different monitors. I also did my best to
