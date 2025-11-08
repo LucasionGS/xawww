@@ -86,7 +86,7 @@ impl<'a> CacheEntry<'a> {
 
         let file = fs::open(
             filepath.as_bytes(),
-            fs::OFlags::RWMODE.union(fs::OFlags::CREATE),
+            fs::OFlags::RDWR.union(fs::OFlags::CREATE),
             fs::Mode::RUSR.union(fs::Mode::WUSR),
         )?;
 
