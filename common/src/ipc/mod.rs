@@ -148,7 +148,7 @@ pub enum RequestRecv {
 }
 
 impl RequestSend {
-    pub fn send(self, stream: &IpcSocket<Client>) -> Result<(), String> {
+    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
         match stream.send(self.into()) {
             Ok(true) => Ok(()),
             Ok(false) => Err("failed to send full length of message in socket!".to_string()),
@@ -172,7 +172,7 @@ pub enum Answer {
 }
 
 impl Answer {
-    pub fn send(self, stream: &IpcSocket<Server>) -> Result<(), String> {
+    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
         match stream.send(self.into()) {
             Ok(true) => Ok(()),
             Ok(false) => Err("failed to send full length of message in socket!".to_string()),

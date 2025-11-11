@@ -24,7 +24,7 @@ use core::{
 
 use animations::Animator;
 use common::ipc::{
-    Answer, BgInfo, ImageReq, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale, Server,
+    Answer, BgInfo, ImageReq, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale,
 };
 use common::mmap::MmappedStr;
 use output_info::OutputInfo;
@@ -123,7 +123,7 @@ impl Daemon {
         }
     }
 
-    fn recv_socket_msg(&mut self, stream: IpcSocket<Server>) {
+    fn recv_socket_msg(&mut self, stream: IpcSocket) {
         let bytes = match stream.recv() {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -798,7 +798,7 @@ struct SocketWrapper {
 impl SocketWrapper {
     fn new(namespace: &str) -> Result<Self, String> {
         use rustix::fs;
-        let addr = IpcSocket::<Server>::path(namespace);
+        let addr = IpcSocket::path(namespace);
 
         if fs::access(&addr, fs::Access::EXISTS).is_ok() {
             if is_daemon_running(namespace)? {
@@ -839,7 +839,7 @@ impl SocketWrapper {
 
 impl Drop for SocketWrapper {
     fn drop(&mut self) {
-        let addr = IpcSocket::<Server>::path(&self.namespace);
+        let addr = IpcSocket::path(&self.namespace);
         if let Err(e) = rustix::fs::unlink(&addr) {
             error!("Failed to remove socket at {}: {e}", addr.display());
         }
@@ -915,7 +915,7 @@ fn make_logger(quiet: bool) {
 }
 
 pub fn is_daemon_running(namespace: &str) -> Result<bool, String> {
-    let sock = match IpcSocket::connect(namespace) {
+    let sock = match IpcSocket::client(namespace) {
         Ok(s) => s,
         // likely a connection refused; either way, this is a reliable signal there's no surviving
         // daemon.

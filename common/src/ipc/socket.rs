@@ -1,4 +1,3 @@
-use core::marker::PhantomData;
 use core::time::Duration;
 use std::env;
 use std::os::unix::ffi::OsStrExt;
@@ -14,19 +13,13 @@ use super::ErrnoExt;
 use super::IpcError;
 use super::IpcErrorKind;
 
-/// Represents client in IPC communication, via typestate pattern in [`IpcSocket`]
-pub struct Client;
-/// Represents server in IPC communication, via typestate pattern in [`IpcSocket`]
-pub struct Server;
-
-/// Typesafe handle for socket facilitating communication between [`Client`] and [`Server`]
 static SOCKET_PATH: OnceLock<PathBuf> = OnceLock::new();
-pub struct IpcSocket<T> {
+
+pub struct IpcSocket {
     fd: OwnedFd,
-    phantom: PhantomData<T>,
 }
 
-impl<T> IpcSocket<T> {
+impl IpcSocket {
     /// Creates new [`IpcSocket`] from provided [`OwnedFd`]
     ///
     /// TODO: remove external ability to construct [`Self`] from random file descriptors
@@ -34,7 +27,6 @@ impl<T> IpcSocket<T> {
     pub fn new(fd: OwnedFd) -> Self {
         Self {
             fd,
-            phantom: PhantomData,
         }
     }
 
@@ -129,11 +121,9 @@ impl<T> IpcSocket<T> {
     pub fn as_fd(&self) -> &OwnedFd {
         &self.fd
     }
-}
 
-impl IpcSocket<Client> {
     /// Connects to already running `Daemon`, if there is one.
-    pub fn connect(namespace: &str) -> Result<Self, IpcError> {
+    pub fn client(namespace: &str) -> Result<Self, IpcError> {
         const ATTEMPTS: usize = 5;
         const INTERVAL: Timespec = Timespec {
             tv_sec: 0,
@@ -181,9 +171,7 @@ impl IpcSocket<Client> {
 
         Err(error.context(kind))
     }
-}
 
-impl IpcSocket<Server> {
     /// Creates [`IpcSocket`] for use in server (i.e `Daemon`)
     pub fn server(namespace: &str) -> Result<Self, IpcError> {
         let addr = net::SocketAddrUnix::new(Self::path(namespace)).expect("addr is correct");

@@ -229,7 +229,7 @@ impl TryFrom<u64> for Code {
 }
 
 // TODO: this along with `RawMsg` should be implementation detail
-impl<T> IpcSocket<T> {
+impl IpcSocket {
     pub fn send(&self, msg: RawMsg) -> io::Result<bool> {
         let mut payload = [0u8; 16];
         payload[0..8].copy_from_slice(&msg.code.into().to_ne_bytes());

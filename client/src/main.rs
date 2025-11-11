@@ -2,7 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use clap::Parser;
 use common::cache;
-use common::ipc::{self, Answer, BgInfo, Client, IpcSocket, RequestSend};
+use common::ipc::{self, Answer, BgInfo, IpcSocket, RequestSend};
 use common::mmap::Mmap;
 
 mod imgproc;
@@ -28,7 +28,7 @@ fn main() -> Result<(), String> {
     };
 
     let namespaces = if all {
-        IpcSocket::<Client>::all_namespaces().map_err(|e| e.to_string())?
+        IpcSocket::all_namespaces().map_err(|e| e.to_string())?
     } else {
         match &awww {
             Awww::Clear(clear) => clear.namespace.clone(),
@@ -45,7 +45,7 @@ fn main() -> Result<(), String> {
 
     let mut infos = Vec::new();
     for namespace in &namespaces {
-        let socket = IpcSocket::connect(namespace).map_err(|err| err.to_string())?;
+        let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
         loop {
             RequestSend::Ping.send(&socket)?;
             let bytes = socket.recv().map_err(|err| err.to_string())?;
@@ -110,7 +110,7 @@ fn process_awww_args(args: &Awww, namespace: &str) -> Result<Option<Box<[BgInfo]
         Some(request) => request,
         None => return Ok(None),
     };
-    let socket = IpcSocket::connect(namespace).map_err(|err| err.to_string())?;
+    let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
     request.send(&socket)?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
@@ -126,7 +126,7 @@ fn process_awww_args(args: &Awww, namespace: &str) -> Result<Option<Box<[BgInfo]
                 let tries = 20;
                 #[cfg(not(debug_assertions))]
                 let tries = 10;
-                let path = IpcSocket::<Client>::path(namespace);
+                let path = IpcSocket::path(namespace);
                 for _ in 0..tries {
                     if rustix::fs::access(&path, rustix::fs::Access::EXISTS).is_err() {
                         return Ok(None);
@@ -358,7 +358,7 @@ fn get_format_dims_and_outputs(
     let mut dims: Vec<(u32, u32)> = Vec::new();
     let mut imgs: Vec<ipc::BgImg> = Vec::new();
 
-    let socket = IpcSocket::connect(namespace).map_err(|err| err.to_string())?;
+    let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
     RequestSend::Query.send(&socket)?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
