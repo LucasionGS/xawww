@@ -13,7 +13,7 @@ use rustix::{fd::OwnedFd, fs::Timespec};
 use smallvec::SmallVec;
 use wallpaper::WallpaperCell;
 
-use waybackend::{Global, objman, types::ObjectId};
+use waybackend::{objman, types::ObjectId};
 use wayland::zwlr_layer_shell_v1::Layer;
 
 use core::{
@@ -76,10 +76,10 @@ struct Daemon {
 
 impl Daemon {
     fn new(
-        mut backend: waybackend::Waybackend,
-        mut objman: objman::ObjectManager<WaylandObject>,
+        backend: waybackend::Waybackend,
+        objman: objman::ObjectManager<WaylandObject>,
         args: cli::Cli,
-        output_globals: Vec<Global>,
+        mut pending_outputs: Vec<OutputInfo>,
     ) -> Self {
         let registry = objman.get_first(WaylandObject::Registry).unwrap();
         let compositor = objman.get_first(WaylandObject::Compositor).unwrap();
@@ -88,17 +88,6 @@ impl Daemon {
         let viewporter = objman.get_first(WaylandObject::Viewporter).unwrap();
         let fractional_scale_manager = objman.get_first(WaylandObject::FractionalScaler);
 
-        let mut pending_outputs = Vec::new();
-
-        for global in output_globals {
-            let output_name = global.name();
-            pending_outputs.push(OutputInfo::new(
-                &mut backend,
-                &mut objman,
-                registry,
-                output_name,
-            ));
-        }
         pending_outputs.shrink_to_fit();
 
         Self {
@@ -629,29 +618,35 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         waybackend::connect::<WaylandObject>(WaylandObject::Display)?;
     let registry = objman.create(WaylandObject::Registry);
     let callback = objman.create(WaylandObject::Callback);
-    let (mut globals, delete_callback) =
-        waybackend::roundtrip(&mut backend, &mut receiver, registry, callback)?;
+    let mut pending_outputs = Vec::new();
+    waybackend::roundtrip(
+        &mut backend,
+        &mut receiver,
+        registry,
+        callback,
+        |backend, global| {
+            use WaylandObject::*;
+            use wayland::*;
 
-    if delete_callback {
-        objman.remove(callback.get().get());
-    }
-
-    {
-        use WaylandObject::*;
-        use wayland::*;
-        waybackend::bind_globals!(
-            backend,
-            objman,
-            registry,
-            globals,
-            (wl_compositor, Compositor),
-            (wl_shm, Shm),
-            (zwlr_layer_shell_v1, LayerShell),
-            (wp_viewporter, Viewporter),
-            (wp_fractional_scale_manager_v1, FractionalScaler),
-        );
-    }
-    globals.retain(|global| global.interface() == wayland::wl_output::NAME);
+            waybackend::bind_globals!(
+                backend,
+                objman,
+                registry,
+                global,
+                |backend, objman, global: waybackend::Global| if global.interface()
+                    == wayland::wl_output::NAME
+                {
+                    pending_outputs.push(OutputInfo::new(backend, objman, registry, global.name()));
+                },
+                (wl_compositor, Compositor),
+                (wl_shm, Shm),
+                (zwlr_layer_shell_v1, LayerShell),
+                (wp_viewporter, Viewporter),
+                (wp_fractional_scale_manager_v1, FractionalScaler),
+            );
+        },
+    )
+    .unwrap();
 
     // create the socket listener and setup the signal handlers
     // this will also return an error if there is an `awww-daemon` instance already
@@ -660,7 +655,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
     setup_signals();
 
     // use the initializer to create the Daemon, then drop it to free up the memory
-    let mut daemon = Daemon::new(backend, objman, cli, globals);
+    let mut daemon = Daemon::new(backend, objman, cli, pending_outputs);
 
     if let Ok(true) = sd_notify::booted()
         && let Err(e) = sd_notify::notify(true, &[sd_notify::NotifyState::Ready])
