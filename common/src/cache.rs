@@ -278,7 +278,7 @@ fn clean_previous_versions() {
 fn create_dir(p: &Path) -> io::Result<()> {
     match fs::access(p.as_bytes(), fs::Access::EXISTS) {
         Ok(()) => Ok(()),
-        Err(_) => fs::mkdir(p.as_bytes(), fs::Mode::RUSR.union(fs::Mode::WUSR)),
+        Err(_) => fs::mkdir(p.as_bytes(), fs::Mode::RWXU),
     }
 }
 
