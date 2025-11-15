@@ -568,15 +568,6 @@ impl wayland::wp_viewporter::EvHandler for Daemon {}
 impl wayland::wp_viewport::EvHandler for Daemon {}
 impl wayland::wp_fractional_scale_manager_v1::EvHandler for Daemon {}
 
-impl Drop for Daemon {
-    fn drop(&mut self) {
-        for wallpaper in &self.wallpapers {
-            let mut w = wallpaper.borrow_mut();
-            w.destroy(&mut self.backend);
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum WaylandObject {
     // standard stuff

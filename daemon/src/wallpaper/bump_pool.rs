@@ -251,9 +251,7 @@ impl BumpPool {
             destroy_buffer(buffer, backend);
         }
 
-        if let Err(e) = wl_shm_pool::req::destroy(backend, self.pool_id) {
-            log::error!("failed to destroy wl_shm_pool: {e}");
-        }
+        wl_shm_pool::req::destroy(backend, self.pool_id).unwrap();
     }
 
     pub fn width(&self) -> i32 {
@@ -267,9 +265,7 @@ impl BumpPool {
 
 fn destroy_buffer(buffer: ObjectId, backend: &mut Waybackend) {
     log::debug!("Destroying buffer with id: {buffer}");
-    if let Err(e) = crate::wayland::wl_buffer::req::destroy(backend, buffer) {
-        log::error!("failed to destroy wl_buffer: {e:?}");
-    }
+    crate::wayland::wl_buffer::req::destroy(backend, buffer).unwrap();
 }
 
 const fn wl_shm_format(pixel_format: PixelFormat) -> wl_shm::Format {

@@ -438,20 +438,11 @@ impl Wallpaper {
     pub fn destroy(&mut self, backend: &mut Waybackend) {
         // Careful not to panic here, since we call this on drop
 
-        if let Err(e) = wp_viewport::req::destroy(backend, self.wp_viewport) {
-            error!("error destroying wp_viewport: {e:?}");
+        wp_viewport::req::destroy(backend, self.wp_viewport).unwrap();
+        if let Some(fractional) = self.wp_fractional {
+            wp_fractional_scale_v1::req::destroy(backend, fractional).unwrap();
         }
-
-        if let Some(fractional) = self.wp_fractional
-            && let Err(e) = wp_fractional_scale_v1::req::destroy(backend, fractional)
-        {
-            error!("error destroying wp_fractional_scale_v1: {e:?}");
-        }
-
-        if let Err(e) = zwlr_layer_surface_v1::req::destroy(backend, self.layer_surface) {
-            error!("error destroying zwlr_layer_surface_v1: {e:?}");
-        }
-
+        zwlr_layer_surface_v1::req::destroy(backend, self.layer_surface).unwrap();
         self.pool.destroy(backend);
 
         debug!(
