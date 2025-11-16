@@ -107,17 +107,14 @@ impl ImageRequestBuilder {
             }
         }
 
-        if animation.is_some()
-            && path != "-"
-            && let Err(e) = cache::store_animation_frames(
-                &self.memory.slice()[animation_start..],
-                path.as_str(),
-                *dims,
-                resize,
-                *format,
-            )
-        {
-            log::error!("failed storing cache for {path}: {e}");
+        if animation.is_some() && path != "-" {
+            let animation = &self.memory.slice()[animation_start..];
+            let mut buf = crate::path::PathBuf::new();
+            buf.append_str(path.as_str());
+            let path = buf.as_path();
+            if let Err(e) = cache::store_animation_frames(animation, path, *dims, resize, *format) {
+                log::error!("failed storing cache for {}: {e}", path.display());
+            }
         }
     }
 

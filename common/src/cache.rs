@@ -11,12 +11,11 @@ use ::alloc::vec::Vec;
 use rustix::path::Arg;
 use rustix::{buffer, fs, io};
 
-type Path = typed_path::Path<typed_path::UnixEncoding>;
-type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
-
 use crate::ipc::Animation;
 use crate::ipc::PixelFormat;
 use crate::mmap::Mmap;
+use crate::path::Path;
+use crate::path::PathBuf;
 
 const CACHE_DIRNAME: &str = env!("CARGO_PKG_VERSION");
 
@@ -82,10 +81,10 @@ impl<'a> CacheEntry<'a> {
 
     pub(crate) fn store(self, output_name: &str) -> io::Result<()> {
         let mut filepath = cache_dir()?;
-        filepath.push(output_name);
+        filepath.push_str(output_name);
 
         let file = fs::open(
-            filepath.as_bytes(),
+            filepath,
             fs::OFlags::RDWR.union(fs::OFlags::CREATE),
             fs::Mode::RUSR.union(fs::Mode::WUSR),
         )?;
@@ -124,16 +123,16 @@ impl<'a> CacheEntry<'a> {
     }
 }
 
-pub(crate) fn store_animation_frames<P: Arg + Copy>(
+pub(crate) fn store_animation_frames(
     animation: &[u8],
-    path: P,
+    path: &Path,
     dimensions: (u32, u32),
     resize: &str,
     pixel_format: PixelFormat,
 ) -> io::Result<()> {
     let filename = animation_filename(&path, dimensions, resize, pixel_format);
     let mut filepath = cache_dir()?;
-    filepath.push(&filename);
+    filepath.push_str(&filename);
 
     if fs::access(path, fs::Access::EXISTS).is_ok() {
         Ok(())
@@ -157,17 +156,13 @@ pub fn load_animation_frames<P: Arg>(
     let filename = animation_filename(path, dimensions, resize, pixel_format);
     let cache_dir = cache_dir()?;
 
-    let dir = fs::Dir::new(fs::open(
-        cache_dir.as_bytes(),
-        fs::OFlags::RDONLY,
-        fs::Mode::RUSR,
-    )?)?;
+    let dir = fs::Dir::new(fs::open(&cache_dir, fs::OFlags::RDONLY, fs::Mode::RUSR)?)?;
 
     let mut filepath = cache_dir;
-    filepath.push(&filename);
+    filepath.push_str(&filename);
     for entry in dir.into_iter().flatten() {
         if entry.file_name().to_bytes() == filename.as_bytes() {
-            let fd = fs::open(filepath.as_bytes(), fs::OFlags::RDONLY, fs::Mode::RUSR)?;
+            let fd = fs::open(&filepath, fs::OFlags::RDONLY, fs::Mode::RUSR)?;
             let len = rustix::fs::seek(&fd, rustix::fs::SeekFrom::End(0))?;
             let mmap = Mmap::from_fd(fd, len as usize);
 
@@ -184,9 +179,9 @@ pub fn read_cache_file(output_name: &str) -> io::Result<CacheData> {
     clean_previous_versions();
 
     let mut filepath = cache_dir()?;
-    filepath.push(output_name);
+    filepath.push_str(output_name);
 
-    let file = fs::open(filepath.as_bytes(), fs::OFlags::RDONLY, fs::Mode::RUSR)?;
+    let file = fs::open(filepath, fs::OFlags::RDONLY, fs::Mode::RUSR)?;
     Ok(CacheData(read_all(&file)?))
 }
 
@@ -204,7 +199,7 @@ pub fn get_previous_image_cache<'a>(
 
 pub fn clean() -> io::Result<()> {
     clean_previous_versions();
-    remove_dir_all(cache_dir()?.as_bytes())
+    remove_dir_all(&cache_dir()?)
 }
 
 fn clean_previous_versions() {
@@ -217,7 +212,7 @@ fn clean_previous_versions() {
     };
 
     let dir_fd = match fs::open(
-        user_cache.as_bytes(),
+        &user_cache,
         fs::OFlags::RDONLY,
         fs::Mode::RUSR.union(fs::Mode::WUSR),
     ) {
@@ -237,14 +232,14 @@ fn clean_previous_versions() {
     };
 
     for entry in dir.into_iter().flatten() {
-        let name = entry.file_name().to_bytes();
+        let name = entry.file_name();
         const CACHE_DIRNAME_BYTES: &[u8] = CACHE_DIRNAME.as_bytes();
-        match name {
+        match name.to_bytes() {
             b"." | b".." | CACHE_DIRNAME_BYTES => continue,
-            otherwise => {
+            _ => {
                 let mut fullpath = user_cache.clone();
-                fullpath.push(otherwise);
-                let stat = match fs::stat(fullpath.as_bytes()) {
+                fullpath.push_cstr(name);
+                let stat = match fs::stat(&fullpath) {
                     Ok(stat) => stat,
                     Err(e) => {
                         log::warn!("failed to stat cache entry {}: {e}", fullpath.display());
@@ -252,21 +247,21 @@ fn clean_previous_versions() {
                     }
                 };
                 if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
-                    if let Err(e) = remove_dir_all(fullpath.as_bytes()) {
+                    if let Err(e) = remove_dir_all(&fullpath) {
                         log::warn!(
                             "failed to remove cache directory {}: {e}",
                             fullpath.display()
                         );
                         continue;
                     }
-                    if let Err(e) = fs::rmdir(fullpath.as_bytes()) {
+                    if let Err(e) = fs::rmdir(&fullpath) {
                         log::warn!(
                             "failed to remove cache directory {}: {e}",
                             fullpath.display()
                         );
                         continue;
                     }
-                } else if let Err(e) = fs::unlink(fullpath.as_bytes()) {
+                } else if let Err(e) = fs::unlink(&fullpath) {
                     log::warn!("failed to remove cache file {}: {e}", fullpath.display());
                     continue;
                 }
@@ -276,22 +271,17 @@ fn clean_previous_versions() {
 }
 
 fn create_dir(p: &Path) -> io::Result<()> {
-    match fs::access(p.as_bytes(), fs::Access::EXISTS) {
+    match fs::access(p, fs::Access::EXISTS) {
         Ok(()) => Ok(()),
-        Err(_) => fs::mkdir(p.as_bytes(), fs::Mode::RWXU),
+        Err(_) => fs::mkdir(p, fs::Mode::RWXU),
     }
 }
 
 fn user_cache_dir() -> io::Result<PathBuf> {
     if let Some(path) = crate::getenv(c"XDG_CACHE_HOME") {
-        let mut path: PathBuf = path.to_bytes().into();
-        path.push("awww");
-        Ok(path)
+        Ok(PathBuf::from_iter([path, c"awww"]))
     } else if let Some(path) = crate::getenv(c"HOME") {
-        let mut path: PathBuf = path.to_bytes().into();
-        path.push(".cache");
-        path.push("awww");
-        Ok(path)
+        Ok(PathBuf::from_iter([path, c".cache", c"awww"]))
     } else {
         Err(io::Errno::NODATA)
     }
@@ -300,7 +290,7 @@ fn user_cache_dir() -> io::Result<PathBuf> {
 fn cache_dir() -> io::Result<PathBuf> {
     let mut path = user_cache_dir()?;
     create_dir(&path)?;
-    path.push(CACHE_DIRNAME);
+    path.push_str(CACHE_DIRNAME);
     create_dir(&path)?;
     Ok(path)
 }
@@ -311,7 +301,7 @@ fn animation_filename<P: Arg>(
     dimensions: (u32, u32),
     resize: &str,
     pixel_format: PixelFormat,
-) -> PathBuf {
+) -> String {
     format!(
         "{}__{}x{}_{}_{:?}",
         path.to_string_lossy().replace('/', "_"),
@@ -320,7 +310,6 @@ fn animation_filename<P: Arg>(
         resize,
         pixel_format,
     )
-    .into()
 }
 
 fn write_all(file: &rustix::fd::OwnedFd, buf: &[u8]) -> io::Result<usize> {
@@ -347,7 +336,7 @@ fn read_all(file: &rustix::fd::OwnedFd) -> io::Result<Vec<u8>> {
     Ok(data)
 }
 
-fn remove_dir_all(dir: &[u8]) -> io::Result<()> {
+fn remove_dir_all(dir: &Path) -> io::Result<()> {
     let base = PathBuf::from(dir);
 
     let dir = fs::Dir::new(fs::open(
@@ -357,19 +346,19 @@ fn remove_dir_all(dir: &[u8]) -> io::Result<()> {
     )?)?;
 
     for entry in dir.into_iter().flatten() {
-        let name = entry.file_name().to_bytes();
+        let name = entry.file_name();
 
-        match name {
+        match name.to_bytes() {
             b"." | b".." => continue,
-            otherwise => {
+            _ => {
                 let mut fullpath = base.clone();
-                fullpath.push(otherwise);
-                let stat = fs::stat(fullpath.as_bytes())?;
+                fullpath.push_cstr(name);
+                let stat = fs::stat(&fullpath)?;
                 if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
-                    remove_dir_all(fullpath.as_bytes())?;
-                    fs::rmdir(fullpath.as_bytes())?;
+                    remove_dir_all(&fullpath)?;
+                    fs::rmdir(&fullpath)?;
                 } else {
-                    fs::unlink(fullpath.as_bytes())?;
+                    fs::unlink(&fullpath)?;
                 }
             }
         }

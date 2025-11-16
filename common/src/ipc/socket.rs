@@ -1,5 +1,4 @@
 use ::alloc::boxed::Box;
-use ::alloc::format;
 use ::alloc::string::{String, ToString};
 use ::alloc::vec::Vec;
 
@@ -11,22 +10,24 @@ use rustix::io::Errno;
 use rustix::net;
 use rustix::time::Timespec;
 
-type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
-type Path = typed_path::Path<typed_path::UnixEncoding>;
+use crate::path::Path;
+use crate::path::PathBuf;
 
 use super::ErrnoExt;
 use super::IpcError;
 use super::IpcErrorKind;
 
 fn get_socket_path_or_init() -> &'static Path {
-    static mut SOCKET_PATH: &[u8] = &[];
+    static mut SOCKET_PATH: &core::ffi::CStr = c"";
     static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
     if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
-        unsafe { SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_vec().into_boxed_slice()) };
+        unsafe {
+            SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str())
+        };
     }
 
-    Path::new(unsafe { SOCKET_PATH })
+    Path::from_cstr(unsafe { SOCKET_PATH })
 }
 
 pub struct IpcSocket {
@@ -50,26 +51,27 @@ impl IpcSocket {
     fn socket_file() -> PathBuf {
         let mut runtime: PathBuf = crate::getenv(c"XDG_RUNTIME_DIR").map_or_else(
             || {
-                let mut p = PathBuf::from_iter(&["run", "user"]);
+                use rustix::path::DecInt;
+                let mut p = PathBuf::from(c"/run/user");
                 let uid = rustix::process::getuid();
-                p.push(format!("{}", uid.as_raw()));
+                p.push_cstr(DecInt::new(uid.as_raw()).as_c_str());
                 p
             },
-            |value| value.to_bytes().into(),
+            <PathBuf as From<&core::ffi::CStr>>::from,
         );
 
-        let display = if let Some(wayland_socket) = crate::getenv(c"WAYLAND_DISPLAY") {
-            let mut path = Path::new(wayland_socket.to_bytes());
+        if let Some(wayland_socket) = crate::getenv(c"WAYLAND_DISPLAY") {
+            let mut path = Path::from_cstr(wayland_socket);
             if let Some(final_component) = path.file_name() {
-                path = Path::new(final_component);
+                path = Path::from_cstr(final_component);
             }
-            ::alloc::format!("{}-awww-daemon", path.display())
+            runtime.push_cstr(path.as_c_str());
+            runtime.append_cstr(c"-awww-daemon");
         } else {
             log::warn!("WAYLAND_DISPLAY variable not set. Defaulting to wayland-0");
-            "wayland-0-awww-daemon".to_string()
-        };
+            runtime.push_cstr(c"wayland-0-awww-daemon");
+        }
 
-        runtime.push(display);
         runtime
     }
 
@@ -79,8 +81,10 @@ impl IpcSocket {
     /// [`Client`] or [`Server`] are recommended.
     #[must_use]
     pub fn path(namespace: &str) -> PathBuf {
-        let mut p = get_socket_path_or_init().to_path_buf();
-        p.set_extension(format!("{namespace}.sock"));
+        let mut p = PathBuf::from(get_socket_path_or_init());
+        p.append_cstr(c".");
+        p.append_str(namespace);
+        p.append_cstr(c".sock");
         p
     }
 
@@ -94,20 +98,16 @@ impl IpcSocket {
 
         let filename = match p.file_name() {
             Some(filename) => {
-                let mut f = filename.to_vec();
+                let mut path = PathBuf::from(filename);
                 // add a final '.' character, because the namespace is always preceded by a dot
                 // character
-                f.push(b'.');
-                f
+                path.append_cstr(c".");
+                path
             }
             None => return Err(Errno::NOENT),
         };
 
-        let dir = fs::Dir::new(fs::open(
-            parent.as_bytes(),
-            fs::OFlags::RDONLY,
-            fs::Mode::RUSR,
-        )?)?;
+        let dir = fs::Dir::new(fs::open(parent, fs::OFlags::RDONLY, fs::Mode::RUSR)?)?;
 
         Ok(dir
             .into_iter()
@@ -118,7 +118,7 @@ impl IpcSocket {
                         .file_name()
                         .to_bytes()
                         .strip_suffix(b".sock")?
-                        .strip_prefix(filename.as_slice())?,
+                        .strip_prefix(filename.as_c_str().to_bytes())?,
                 )
                 .map(ToString::to_string)
                 .ok()
@@ -148,7 +148,7 @@ impl IpcSocket {
         .context(IpcErrorKind::Socket)?;
 
         let path = Self::path(namespace);
-        let addr = net::SocketAddrUnix::new(path.as_bytes()).expect("addr is correct");
+        let addr = net::SocketAddrUnix::new(&path).expect("addr is incorrect");
 
         // this will be overwritten, Rust just doesn't know it
         let mut error = Errno::INVAL;
@@ -183,8 +183,7 @@ impl IpcSocket {
 
     /// Creates [`IpcSocket`] for use in server (i.e `Daemon`)
     pub fn server(namespace: &str) -> Result<Self, IpcError> {
-        let addr =
-            net::SocketAddrUnix::new(Self::path(namespace).as_bytes()).expect("addr is correct");
+        let addr = net::SocketAddrUnix::new(Self::path(namespace)).expect("addr is correct");
         let socket = net::socket_with(
             net::AddressFamily::UNIX,
             net::SocketType::STREAM,

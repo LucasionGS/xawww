@@ -5,7 +5,7 @@ use core::fmt;
 
 use rustix::io::Errno;
 
-type PathBuf = typed_path::PathBuf<typed_path::UnixEncoding>;
+use crate::path::PathBuf;
 
 /// Failures if IPC with added context
 #[derive(Debug)]

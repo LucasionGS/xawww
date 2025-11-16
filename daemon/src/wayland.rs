@@ -31,22 +31,19 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
         let unix_addr = if socket_name.to_bytes()[0] == b'/' {
             rustix::net::SocketAddrUnix::new(socket_name).unwrap()
         } else {
-            let mut socket_fullpath = Vec::new();
+            let mut socket_fullpath = common::path::PathBuf::new();
             match common::getenv(c"XDG_RUNTIME_DIR") {
-                Some(socket_path) => {
-                    socket_fullpath.extend_from_slice(socket_path.to_bytes());
-                    socket_fullpath.push(b'/');
-                }
+                Some(socket_path) => socket_fullpath.push_cstr(socket_path),
                 None => {
+                    use rustix::path::DecInt;
                     log::warn!("XDG_RUNTIME_DIR is not set! Defaulting to /run/user/UID");
                     let uid = rustix::process::getuid();
-                    socket_fullpath.extend_from_slice(b"/run/user/");
-                    socket_fullpath.extend_from_slice(uid.as_raw().to_string().as_bytes());
-                    socket_fullpath.push(b'/');
+                    socket_fullpath.push_cstr(c"/run/user");
+                    socket_fullpath.push_cstr(DecInt::new(uid.as_raw()).as_c_str());
                 }
             }
-            socket_fullpath.extend_from_slice(socket_name.to_bytes());
-            rustix::net::SocketAddrUnix::new(socket_fullpath.as_slice()).unwrap()
+            socket_fullpath.push_cstr(socket_name);
+            rustix::net::SocketAddrUnix::new(socket_fullpath).unwrap()
         };
 
         let socket = rustix::net::socket_with(

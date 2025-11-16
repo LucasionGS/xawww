@@ -803,7 +803,7 @@ impl SocketWrapper {
         use rustix::fs;
         let addr = IpcSocket::path(namespace);
 
-        if fs::access(addr.as_bytes(), fs::Access::EXISTS).is_ok() {
+        if fs::access(&addr, fs::Access::EXISTS).is_ok() {
             if is_daemon_running(namespace)? {
                 return Err(
                     "There is an awww-daemon instance already running on this socket!".to_string(),
@@ -813,7 +813,7 @@ impl SocketWrapper {
                 "socket file {} was not deleted when the previous daemon exited",
                 addr.display()
             );
-            if let Err(e) = fs::unlink(addr.as_bytes()) {
+            if let Err(e) = fs::unlink(&addr) {
                 return Err(format!("failed to delete previous socket: {e}"));
             }
         }
@@ -823,8 +823,8 @@ impl SocketWrapper {
             None => return Err("couldn't find a valid runtime directory".to_owned()),
         };
 
-        if fs::access(runtime_dir.as_bytes(), fs::Access::EXISTS).is_err() {
-            match fs::mkdir(runtime_dir.as_bytes(), fs::Mode::RUSR.union(fs::Mode::WUSR)) {
+        if fs::access(&runtime_dir, fs::Access::EXISTS).is_err() {
+            match fs::mkdir(runtime_dir, fs::Mode::RUSR.union(fs::Mode::WUSR)) {
                 Ok(()) => (),
                 Err(e) => return Err(format!("failed to create runtime dir: {e}")),
             }
@@ -832,7 +832,7 @@ impl SocketWrapper {
 
         let socket = IpcSocket::server(namespace).map_err(|err| err.to_string())?;
 
-        debug!("Created socket in {}", addr.display());
+        debug!("Created socket at {}", addr.display());
         Ok(Self {
             fd: socket.to_fd(),
             namespace: namespace.to_string(),
@@ -843,7 +843,7 @@ impl SocketWrapper {
 impl Drop for SocketWrapper {
     fn drop(&mut self) {
         let addr = IpcSocket::path(&self.namespace);
-        if let Err(e) = rustix::fs::unlink(addr.as_bytes()) {
+        if let Err(e) = rustix::fs::unlink(&addr) {
             error!("Failed to remove socket at {}: {e}", addr.display());
         }
         info!("Removed socket at {}", addr.display());

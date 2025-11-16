@@ -3,6 +3,7 @@
 
 extern crate alloc;
 
+pub mod path;
 pub mod cache;
 pub mod compression;
 pub mod ipc;

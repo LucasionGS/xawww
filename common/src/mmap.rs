@@ -62,6 +62,7 @@ impl Mmap {
     }
 
     fn shm() -> io::Result<OwnedFd> {
+        use rustix::path::DecInt;
         use rustix::time::{ClockId, clock_gettime};
 
         const PREFIX: &[u8] = b"/awww-ipc-";
@@ -74,8 +75,11 @@ impl Mmap {
             let filename = {
                 let time = clock_gettime(ClockId::Monotonic);
                 write_buf.truncate(PREFIX.len());
-                write_buf.extend_from_slice(rustix::path::DecInt::new(time.tv_nsec).as_bytes());
-                write_buf.as_slice()
+                write_buf.extend_from_slice(DecInt::new(time.tv_nsec).as_bytes_with_nul());
+                // SAFETY: write buf is null terminated and cannot hold any other internal null
+                // bytes, since it is composed of the PREFIX (which has no null bytes) and the
+                // integer formatting (which also has no null bytes, except the final one)
+                unsafe { core::ffi::CStr::from_bytes_with_nul_unchecked(write_buf.as_slice()) }
             };
             match shm::open(filename, FLAGS, MODE) {
                 Ok(fd) => return shm::unlink(filename).map(|()| fd),

@@ -128,7 +128,7 @@ fn process_awww_args(args: &Awww, namespace: &str) -> Result<Option<Box<[BgInfo]
                 let tries = 10;
                 let path = IpcSocket::path(namespace);
                 for _ in 0..tries {
-                    if rustix::fs::access(path.as_bytes(), rustix::fs::Access::EXISTS).is_err() {
+                    if rustix::fs::access(&path, rustix::fs::Access::EXISTS).is_err() {
                         return Ok(None);
                     }
                     std::thread::sleep(Duration::from_millis(100));

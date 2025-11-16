@@ -22,9 +22,6 @@ rustix = { version = "1.1", default-features = false, features = [
   "thread",
   "time",
 ] }
-# the only reason we are using this is that it lets us use Path and PathBuf
-# without Rust's std
-typed-path = { version = "0.12", default-features = false }
 cpufeatures = { version = "0.2" }
 
 [build-dependencies]
