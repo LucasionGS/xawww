@@ -134,13 +134,13 @@ pub(crate) fn store_animation_frames(
     let mut filepath = cache_dir()?;
     filepath.push_str(&filename);
 
-    if fs::access(path, fs::Access::EXISTS).is_ok() {
+    if fs::access(&filepath, fs::Access::EXISTS).is_ok() {
         Ok(())
     } else {
         let file = fs::open(
-            path,
+            filepath,
             fs::OFlags::WRONLY.union(fs::OFlags::CREATE),
-            fs::Mode::WUSR,
+            fs::Mode::WUSR.union(fs::Mode::RUSR),
         )?;
         write_all(&file, animation)?;
         Ok(())
