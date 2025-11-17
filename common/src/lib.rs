@@ -3,11 +3,11 @@
 
 extern crate alloc;
 
-pub mod path;
 pub mod cache;
 pub mod compression;
 pub mod ipc;
 pub mod mmap;
+pub mod path;
 
 /// Manual getenv implementation from an extern environ variable.
 ///
