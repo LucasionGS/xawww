@@ -47,7 +47,7 @@ fn main() -> Result<(), String> {
     for namespace in &namespaces {
         let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
         loop {
-            RequestSend::Ping.send(&socket)?;
+            RequestSend::Ping.send(&socket).map_err(|e| e.to_string())?;
             let bytes = socket.recv().map_err(|err| err.to_string())?;
             let answer = Answer::receive(bytes);
             if let Answer::Ping(configured) = answer {
@@ -111,7 +111,7 @@ fn process_awww_args(args: &Awww, namespace: &str) -> Result<Option<Box<[BgInfo]
         None => return Ok(None),
     };
     let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
-    request.send(&socket)?;
+    request.send(&socket).map_err(|e| e.to_string())?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
     match Answer::receive(bytes) {
@@ -158,7 +158,9 @@ fn make_request(args: &Awww, namespace: &str) -> Result<Option<RequestSend>, Str
                 color,
                 outputs: split_cmdline_outputs(&c.outputs),
             };
-            Ok(Some(RequestSend::Clear(clear.create_request())))
+            Ok(Some(RequestSend::Clear(
+                clear.create_request().map_err(|e| e.to_string())?,
+            )))
         }
         Awww::Restore(restore) => {
             let requested_outputs = split_cmdline_outputs(&restore.outputs);
@@ -190,7 +192,8 @@ fn make_img_request(
     outputs: &[Vec<String>],
 ) -> Result<Mmap, String> {
     let transition = make_transition(img);
-    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition);
+    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition)
+        .map_err(|e| format!("failed to create ImageRequestBuilder: {e}"))?;
 
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
@@ -359,7 +362,9 @@ fn get_format_dims_and_outputs(
     let mut imgs: Vec<ipc::BgImg> = Vec::new();
 
     let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
-    RequestSend::Query.send(&socket)?;
+    RequestSend::Query
+        .send(&socket)
+        .map_err(|e| e.to_string())?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
     let answer = Answer::receive(bytes);

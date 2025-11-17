@@ -148,7 +148,7 @@ impl IpcSocket {
         .context(IpcErrorKind::Socket)?;
 
         let path = Self::path(namespace);
-        let addr = net::SocketAddrUnix::new(&path).expect("addr is incorrect");
+        let addr = net::SocketAddrUnix::new(&path).context(IpcErrorKind::SocketAddr)?;
 
         // this will be overwritten, Rust just doesn't know it
         let mut error = Errno::INVAL;
@@ -173,7 +173,7 @@ impl IpcSocket {
         }
 
         let kind = if error == Errno::NOENT {
-            IpcErrorKind::NoSocketFile(path)
+            IpcErrorKind::NoSocketFile(path.into_boxed_path())
         } else {
             IpcErrorKind::Connect
         };
@@ -183,7 +183,8 @@ impl IpcSocket {
 
     /// Creates [`IpcSocket`] for use in server (i.e `Daemon`)
     pub fn server(namespace: &str) -> Result<Self, IpcError> {
-        let addr = net::SocketAddrUnix::new(Self::path(namespace)).expect("addr is correct");
+        let addr =
+            net::SocketAddrUnix::new(Self::path(namespace)).context(IpcErrorKind::SocketAddr)?;
         let socket = net::socket_with(
             net::AddressFamily::UNIX,
             net::SocketType::STREAM,

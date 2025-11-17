@@ -27,23 +27,22 @@ impl Mmap {
     const FLAGS: MapFlags = MapFlags::SHARED;
 
     #[inline]
-    #[must_use]
-    pub fn create(len: usize) -> Self {
-        let fd = Self::mmap_fd().unwrap();
-        rustix::io::retry_on_intr(|| rustix::fs::ftruncate(&fd, len as u64)).unwrap();
+    pub fn create(len: usize) -> io::Result<Self> {
+        let fd = Self::mmap_fd()?;
+        rustix::io::retry_on_intr(|| rustix::fs::ftruncate(&fd, len as u64))?;
 
         let ptr = unsafe {
-            let ptr = mmap(core::ptr::null_mut(), len, Self::PROT, Self::FLAGS, &fd, 0).unwrap();
+            let ptr = mmap(core::ptr::null_mut(), len, Self::PROT, Self::FLAGS, &fd, 0)?;
             // SAFETY: the function above will never return a null pointer if it succeeds
             // POSIX says that the implementation will never select an address at 0
             NonNull::new_unchecked(ptr)
         };
-        Self {
+        Ok(Self {
             fd,
             ptr,
             len,
             mmapped: true,
-        }
+        })
     }
 
     #[cfg(target_os = "linux")]
@@ -290,7 +289,7 @@ impl<const UTF8: bool> Mmapped<UTF8> {
         if UTF8 {
             // try to parse, panicking if we fail
             let s = unsafe { core::slice::from_raw_parts(ptr.as_ptr().cast(), len) };
-            let _s = core::str::from_utf8(s).expect("received a non utf8 string from socket");
+            let _ = core::str::from_utf8(s).expect("received a non utf8 string from socket");
         }
 
         Self { base_ptr, ptr, len }
@@ -301,17 +300,15 @@ impl<const UTF8: bool> Mmapped<UTF8> {
     pub fn bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.ptr.as_ptr().cast(), self.len) }
     }
+}
 
+impl Mmapped<true> {
     #[inline]
     #[must_use]
     pub const fn str(&self) -> &str {
-        if UTF8 {
-            unsafe {
-                let slice = core::slice::from_raw_parts(self.ptr.as_ptr().cast(), self.len);
-                core::str::from_utf8_unchecked(slice)
-            }
-        } else {
-            panic!("trying to use a mmap that is not a utf8 as str")
+        unsafe {
+            let slice = core::slice::from_raw_parts(self.ptr.as_ptr().cast(), self.len);
+            core::str::from_utf8_unchecked(slice)
         }
     }
 }

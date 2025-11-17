@@ -83,10 +83,9 @@ impl BumpPool {
         pixel_format: PixelFormat,
     ) -> Self {
         let len = width as usize * height as usize * pixel_format.channels() as usize;
-        let mmap = Mmap::create(len);
+        let mmap = Mmap::create(len).expect("failed to create memory map");
         let pool_id = objman.create(WaylandObject::ShmPool);
-        wl_shm::req::create_pool(backend, shm, pool_id, &mmap.fd(), len as i32)
-            .expect("failed to create WlShmPool object");
+        wl_shm::req::create_pool(backend, shm, pool_id, &mmap.fd(), len as i32).unwrap();
         Self {
             pool_id,
             mmap,

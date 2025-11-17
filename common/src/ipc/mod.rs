@@ -1,6 +1,7 @@
 use ::alloc::boxed::Box;
-use ::alloc::format;
-use ::alloc::string::{String, ToString};
+use ::alloc::string::String;
+
+use rustix::io;
 
 use transmit::RawMsg;
 
@@ -24,9 +25,8 @@ pub struct ImageRequestBuilder {
 
 impl ImageRequestBuilder {
     #[inline]
-    #[must_use]
-    pub fn new(transition: Transition) -> Self {
-        let memory = Mmap::create(1 << (20 + 3)); // start with 8 MB
+    pub fn new(transition: Transition) -> io::Result<Self> {
+        let memory = Mmap::create(1 << (20 + 3))?; // start with 8 MB
         let len = 0;
         let mut builder = Self {
             memory,
@@ -38,7 +38,7 @@ impl ImageRequestBuilder {
         builder.img_count_index = builder.len;
         builder.len += 1;
         assert_eq!(builder.len, 52);
-        builder
+        Ok(builder)
     }
 
     fn push_byte(&mut self, byte: u8) {
@@ -149,12 +149,8 @@ pub enum RequestRecv {
 }
 
 impl RequestSend {
-    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
-        match stream.send(self.into()) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err("failed to send full length of message in socket!".to_string()),
-            Err(e) => Err(format!("failed to write serialized request: {e}")),
-        }
+    pub fn send(self, stream: &IpcSocket) -> Result<(), IpcError> {
+        stream.send(self.into())
     }
 }
 
@@ -173,12 +169,8 @@ pub enum Answer {
 }
 
 impl Answer {
-    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
-        match stream.send(self.into()) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err("failed to send full length of message in socket!".to_string()),
-            Err(e) => Err(format!("failed to write serialized request: {e}")),
-        }
+    pub fn send(self, stream: &IpcSocket) -> Result<(), IpcError> {
+        stream.send(self.try_into()?)
     }
 
     #[must_use]

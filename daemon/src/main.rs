@@ -27,7 +27,7 @@ use core::{
 
 use animations::Animator;
 use common::ipc::{
-    Answer, BgInfo, ImageReq, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale,
+    Answer, BgInfo, ImageReq, IpcError, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale,
 };
 use common::mmap::MmappedStr;
 use output_info::OutputInfo;
@@ -804,7 +804,7 @@ impl SocketWrapper {
         let addr = IpcSocket::path(namespace);
 
         if fs::access(&addr, fs::Access::EXISTS).is_ok() {
-            if is_daemon_running(namespace)? {
+            if is_daemon_running(namespace).map_err(|s| s.to_string())? {
                 return Err(
                     "There is an awww-daemon instance already running on this socket!".to_string(),
                 );
@@ -918,7 +918,7 @@ fn make_logger(quiet: bool) {
     .unwrap();
 }
 
-pub fn is_daemon_running(namespace: &str) -> Result<bool, String> {
+pub fn is_daemon_running(namespace: &str) -> Result<bool, IpcError> {
     let sock = match IpcSocket::client(namespace) {
         Ok(s) => s,
         // likely a connection refused; either way, this is a reliable signal there's no surviving
@@ -927,10 +927,10 @@ pub fn is_daemon_running(namespace: &str) -> Result<bool, String> {
     };
 
     RequestSend::Ping.send(&sock)?;
-    let answer = Answer::receive(sock.recv().map_err(|err| err.to_string())?);
+    let answer = Answer::receive(sock.recv()?);
     match answer {
         Answer::Ping(_) => Ok(true),
-        _ => Err("Daemon did not return Answer::Ping, as expected".to_string()),
+        _ => panic!("Daemon did not return Answer::Ping, as expected"),
     }
 }
 

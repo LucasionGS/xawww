@@ -1,5 +1,6 @@
+use ::alloc::boxed::Box;
+use ::alloc::ffi::CString;
 use ::alloc::vec::Vec;
-use alloc::ffi::CString;
 use core::ffi::CStr;
 
 use rustix::path::Arg;
@@ -29,6 +30,7 @@ const PATHSEP: u8 = b'/';
 #[repr(transparent)]
 pub struct PathBuf(Vec<u8>);
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct Path(CStr);
 
@@ -103,6 +105,11 @@ impl PathBuf {
 
     pub fn into_c_string(self) -> CString {
         unsafe { CString::from_vec_with_nul_unchecked(self.0) }
+    }
+
+    pub fn into_boxed_path(self) -> Box<Path> {
+        let rw = Box::into_raw(self.0.into_boxed_slice()) as *mut Path;
+        unsafe { Box::from_raw(rw) }
     }
 }
 
