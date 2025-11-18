@@ -1398,9 +1398,9 @@ dependencies = [
 
 [[package]]
 name = "waybackend"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cedf95eaad62a17a84bf846e27139e9fa89a8ebe864308853acf20a45429ffa6"
+checksum = "8d00cad01a57d5ff9ba85397cf7e795d16ff5ea2d4f52cdb50d8b3a1b4381ed9"
 dependencies = [
  "bitflags 2.10.0",
  "log",
@@ -1409,9 +1409,9 @@ dependencies = [
 
 [[package]]
 name = "waybackend-scanner"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41941c861a2a4485dd6e41b9e1560cdb7060744feee246cba0eb398ddad7c5f3"
+checksum = "b7e843a5b97bbb8ed97077d81c0deac29bde371c96a9566c3dc814e34a862e67"
 dependencies = [
  "pkg-config",
  "proc-macro2",
