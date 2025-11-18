@@ -609,7 +609,10 @@ pub fn make_transition(img: &cli::Img) -> ipc::Transition {
         cli::TransitionType::None => ipc::TransitionType::None,
         cli::TransitionType::Simple => ipc::TransitionType::Simple,
         cli::TransitionType::Fade => ipc::TransitionType::Fade,
-        cli::TransitionType::Wipe => ipc::TransitionType::Wipe,
+        cli::TransitionType::Wipe => {
+            wave = (0.0, 0.0);
+            ipc::TransitionType::Wipe
+        }
         cli::TransitionType::Outer => ipc::TransitionType::Outer,
         cli::TransitionType::Grow => ipc::TransitionType::Grow,
         cli::TransitionType::Wave => ipc::TransitionType::Wave,

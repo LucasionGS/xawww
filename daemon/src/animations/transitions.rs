@@ -75,7 +75,6 @@ pub enum Effect {
     Simple(Simple),
     Fade(Fade),
     Wave(Wave),
-    Wipe(Wipe),
     Grow(Grow),
     Outer(Outer),
 }
@@ -86,9 +85,10 @@ impl Effect {
             TransitionType::Simple => Self::Simple(Simple::new(transition.step)),
             TransitionType::Fade => Self::Fade(Fade::new(transition)),
             TransitionType::Outer => Self::Outer(Outer::new(transition, dimensions)),
-            TransitionType::Wipe => Self::Wipe(Wipe::new(transition, dimensions)),
             TransitionType::Grow => Self::Grow(Grow::new(transition, dimensions)),
-            TransitionType::Wave => Self::Wave(Wave::new(transition, dimensions)),
+            TransitionType::Wipe | TransitionType::Wave => {
+                Self::Wave(Wave::new(transition, dimensions))
+            }
             TransitionType::None => Self::None(None),
         }
     }
@@ -106,7 +106,6 @@ impl Effect {
             Effect::Simple(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Fade(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Wave(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
-            Effect::Wipe(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Grow(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Outer(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
         };
@@ -120,7 +119,6 @@ impl Effect {
                 Effect::None(_) | Effect::Simple(_) => return true,
                 Effect::Fade(t) => Effect::Simple(Simple::new(new_nonzero(t.step as u8))),
                 Effect::Wave(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
-                Effect::Wipe(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
                 Effect::Grow(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
                 Effect::Outer(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
             };
@@ -337,98 +335,6 @@ impl Wave {
             });
         }
 
-        elapsed(self.start) > self.seq.duration()
-    }
-}
-
-struct Wipe {
-    start: f64,
-    seq: AnimationSequence<f32>,
-    center: (u32, u32),
-    circle_radius: f64,
-    a: f64,
-    b: f64,
-    step: NonZeroU8,
-}
-
-impl Wipe {
-    fn new(transition: &Transition, dimensions: (u32, u32)) -> Self {
-        let width = dimensions.0;
-        let height = dimensions.1;
-        let center = (width / 2, height / 2);
-        let screen_diag = ((width.pow(2) + height.pow(2)) as f64).sqrt();
-
-        let circle_radius = screen_diag / 2.0;
-        let max_offset = circle_radius.pow(2) * 2.0;
-
-        let angle = transition.angle.to_radians();
-
-        let offset = {
-            let (x, y) = angle.sin_cos();
-            (x.abs() * width as f64 + y.abs() * height as f64) * 2.0
-        };
-
-        let a = circle_radius * angle.cos();
-        let b = circle_radius * angle.sin();
-
-        let (seq, start) = bezier_seq(transition, offset as f32, max_offset as f32);
-
-        let step = transition.step;
-        Self {
-            start,
-            seq,
-            center,
-            circle_radius,
-            a,
-            b,
-            step,
-        }
-    }
-    fn run(
-        &mut self,
-        backend: &mut Waybackend,
-        objman: &mut ObjectManager<WaylandObject>,
-        pixel_format: PixelFormat,
-        wallpapers: &mut [WallpaperCell],
-        img: &[u8],
-    ) -> bool {
-        let Self {
-            center,
-            circle_radius,
-            a,
-            b,
-            step,
-            ..
-        } = *self;
-        let channels = pixel_format.channels() as usize;
-        let offset = self.seq.now() as f64;
-        self.seq.advance_to(elapsed(self.start));
-        for wallpaper in wallpapers.iter() {
-            let mut wallpaper = wallpaper.borrow_mut();
-            let dim = wallpaper.get_dimensions();
-            let width = dim.0 as usize;
-            let height = dim.1 as usize;
-            let stride = width * pixel_format.channels() as usize;
-            wallpaper.canvas_change(backend, objman, pixel_format, |canvas| {
-                // line formula: (x-h)*a + (y-k)*b + C = r^2
-                // https://www.desmos.com/calculator/vpvzk12yar
-                for line in 0..height {
-                    let y = ((height - line) as f64 - center.1 as f64) * b;
-                    let x = (circle_radius.powi(2) - y - offset) / a + center.0 as f64;
-                    let x = x.min(width as f64);
-                    let (col_begin, col_end) = if a.is_sign_negative() {
-                        (0usize, x as usize * channels)
-                    } else {
-                        (x as usize * channels, stride)
-                    };
-                    for col in col_begin..col_end {
-                        let old = unsafe { canvas.get_unchecked_mut(line * stride + col) };
-                        let new = unsafe { img.get_unchecked(line * stride + col) };
-                        change_byte(step, old, new);
-                    }
-                }
-            });
-        }
         elapsed(self.start) > self.seq.duration()
     }
 }
