@@ -19,7 +19,6 @@ pub enum Filter {
     Fatal = 5,
 }
 
-#[cold]
 pub fn init(filter: Filter) {
     static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
