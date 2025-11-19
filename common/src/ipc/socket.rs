@@ -10,6 +10,7 @@ use rustix::io::Errno;
 use rustix::net;
 use rustix::time::Timespec;
 
+use crate::log;
 use crate::path::Path;
 use crate::path::PathBuf;
 

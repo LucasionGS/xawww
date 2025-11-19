@@ -10,7 +10,7 @@ mod output_info;
 mod systemd;
 mod wallpaper;
 mod wayland;
-use log::{LevelFilter, debug, error, info, trace, warn};
+use common::log::{Filter, debug, error, info, trace, warn};
 use rustix::{fd::OwnedFd, fs::Timespec};
 
 use smallvec::SmallVec;
@@ -617,7 +617,11 @@ pub extern "C" fn main(
             return -1;
         }
     };
-    make_logger(cli.quiet);
+    common::log::init(if cli.quiet {
+        Filter::Error
+    } else {
+        Filter::Info
+    });
 
     // next, initialize all wayland stuff
     let (mut backend, mut objman, mut receiver) = wayland::connect();
@@ -848,74 +852,6 @@ impl Drop for SocketWrapper {
         }
         info!("Removed socket at {}", addr.display());
     }
-}
-
-struct Logger {
-    level_filter: LevelFilter,
-    is_term: bool,
-}
-
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.level_filter
-    }
-
-    fn log(&self, record: &log::Record) {
-        if self.enabled(record.metadata()) {
-            let level = if self.is_term {
-                match record.level() {
-                    log::Level::Error => "\x1b[31m[ERROR]\x1b[0m",
-                    log::Level::Warn => "\x1b[33m[WARN]\x1b[0m ",
-                    log::Level::Info => "\x1b[32m[INFO]\x1b[0m ",
-                    log::Level::Debug => "\x1b[36m[DEBUG]\x1b[0m",
-                    log::Level::Trace => "[TRACE]",
-                }
-            } else {
-                match record.level() {
-                    log::Level::Error => "[ERROR]",
-                    log::Level::Warn => "[WARN] ",
-                    log::Level::Info => "[INFO] ",
-                    log::Level::Debug => "[DEBUG]",
-                    log::Level::Trace => "[TRACE]",
-                }
-            };
-
-            let msg = record.args();
-            let msg = match msg.as_str() {
-                Some(s) => std::borrow::Cow::Borrowed(s),
-                None => std::borrow::Cow::Owned(msg.to_string()),
-            };
-
-            let stderr = unsafe { rustix::stdio::stderr() };
-            let bufs = [
-                rustix::io::IoSlice::new(level.as_bytes()),
-                rustix::io::IoSlice::new(b" "),
-                rustix::io::IoSlice::new(msg.as_bytes()),
-                rustix::io::IoSlice::new(b"\n"),
-            ];
-            _ = rustix::io::writev(stderr, &bufs);
-        }
-    }
-
-    fn flush(&self) {
-        //no op (we do not buffer anything)
-    }
-}
-
-fn make_logger(quiet: bool) {
-    let level_filter = if quiet {
-        LevelFilter::Error
-    } else {
-        LevelFilter::Debug
-    };
-
-    let stderr = unsafe { rustix::stdio::stderr() };
-    log::set_logger(Box::leak(Box::new(Logger {
-        level_filter,
-        is_term: rustix::termios::isatty(stderr),
-    })))
-    .map(|()| log::set_max_level(level_filter))
-    .unwrap();
 }
 
 pub fn is_daemon_running(namespace: &str) -> Result<bool, IpcError> {

@@ -10,7 +10,6 @@ license-file.workspace = true
 workspace = true
 
 [dependencies]
-log =   { version = "0.4",  default-features = false }
 image = { version = "0.25", default-features = false, features = [
   # all formats, except avif, since avif compiles just rav1d, which is just an
   # encoder, which we do not care about. avif-native is an optional dependency,

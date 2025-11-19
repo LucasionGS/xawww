@@ -1,8 +1,8 @@
 use common::{
     cache::{get_previous_image_cache, read_cache_file},
     ipc::{BgImg, BgInfo, PixelFormat, Scale},
+    log::{debug, error, warn},
 };
-use log::{debug, error, warn};
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 
 use core::num::NonZeroI32;
@@ -323,7 +323,7 @@ impl Wallpaper {
                                 panic!("execve failed: {err}");
                             }
                             Ok(rustix::runtime::Fork::ParentOf(_)) => (),
-                            Err(e) => log::error!("fork failed: {e}"),
+                            Err(e) => error!("fork failed: {e}"),
                         }
                     }
                     Ok(None) => break 'brk,
@@ -336,10 +336,9 @@ impl Wallpaper {
         }
 
         let (width, height) = (self.width.get(), self.height.get());
-        log::debug!(
+        debug!(
             "Output {} new configuration: width: {width}, height: {height}, scale_factor: {}",
-            self.output_name,
-            self.scale_factor
+            self.output_name, self.scale_factor
         );
 
         wp_viewport::req::set_destination(backend, self.wp_viewport, width, height).unwrap();

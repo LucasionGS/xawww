@@ -1,5 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/wayland_protocols.rs"));
 
+use common::log;
 use waybackend::{Waybackend, objman::ObjectManager, wire::Receiver};
 
 use crate::WaylandObject;

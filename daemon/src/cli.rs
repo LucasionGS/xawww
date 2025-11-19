@@ -1,5 +1,6 @@
 use crate::wayland::zwlr_layer_shell_v1::Layer;
 use common::ipc::PixelFormat;
+use common::log;
 use core::ffi::CStr;
 use std::borrow::Cow;
 

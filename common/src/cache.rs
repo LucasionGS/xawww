@@ -13,6 +13,7 @@ use rustix::{buffer, fs, io};
 
 use crate::ipc::Animation;
 use crate::ipc::PixelFormat;
+use crate::log;
 use crate::mmap::Mmap;
 use crate::path::Path;
 use crate::path::PathBuf;

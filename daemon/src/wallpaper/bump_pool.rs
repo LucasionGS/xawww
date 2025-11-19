@@ -1,4 +1,4 @@
-use common::{ipc::PixelFormat, mmap::Mmap};
+use common::{ipc::PixelFormat, log, mmap::Mmap};
 use smallvec::SmallVec;
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 

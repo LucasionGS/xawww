@@ -11,7 +11,7 @@ pub fn notify() -> io::Result<()> {
 
         let len = net::send(sock, msg, net::SendFlags::empty())?;
         if len != msg.len() {
-            log::error!("failed to write full message to SystemD socket");
+            common::log::error!("failed to write full message to SystemD socket");
         }
     }
     Ok(())

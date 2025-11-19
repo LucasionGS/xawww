@@ -14,6 +14,8 @@ use rustix::shm;
 use rustix::shm::Mode;
 use rustix::shm::OFlags;
 
+use crate::log;
+
 #[derive(Debug)]
 pub struct Mmap {
     fd: OwnedFd,

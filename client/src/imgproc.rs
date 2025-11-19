@@ -677,6 +677,6 @@ pub fn make_transition(img: &cli::Img) -> ipc::Transition {
         invert_y: img.invert_y,
     };
 
-    log::debug!("transition: {transition:#?}");
+    common::log::debug!("transition: {transition:#?}");
     transition
 }

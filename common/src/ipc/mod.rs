@@ -11,6 +11,7 @@ mod transmit;
 mod types;
 
 use crate::cache;
+use crate::log;
 use crate::mmap::Mmap;
 pub use error::*;
 pub use socket::*;

@@ -127,7 +127,6 @@ dependencies = [
  "fastrand",
  "image",
  "jzon",
- "log",
  "resvg",
  "rustix",
 ]
@@ -139,7 +138,6 @@ dependencies = [
  "common",
  "keyframe",
  "libc",
- "log",
  "rustix",
  "smallvec",
  "waybackend",
@@ -304,7 +302,6 @@ version = "0.11.2-master2"
 dependencies = [
  "cpufeatures",
  "fastrand",
- "log",
  "pkg-config",
  "rustix",
 ]
