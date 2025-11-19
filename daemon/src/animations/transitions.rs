@@ -3,12 +3,10 @@ use core::num::NonZeroU8;
 use crate::{WaylandObject, wallpaper::WallpaperCell};
 use common::ipc::{PixelFormat, Transition, TransitionType};
 
-use keyframe::{
-    AnimationSequence, functions::BezierCurve, keyframes, mint::Vector2, num_traits::Pow,
-};
+use super::keyframe::{AnimationSequence, Keyframe, Vector2, functions::BezierCurve};
 use waybackend::{Waybackend, objman::ObjectManager};
 
-fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence<f32>, f64) {
+fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence, f64) {
     let bezier = BezierCurve::from(
         Vector2 {
             x: transition.bezier.0,
@@ -19,7 +17,11 @@ fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequen
             y: transition.bezier.3,
         },
     );
-    let animation_sequence = keyframes![(start, 0.0, bezier), (end, transition.duration, bezier)];
+    let seq = [
+        Keyframe::new(start, 0.0, bezier),
+        Keyframe::new(end, transition.duration as f64, bezier),
+    ];
+    let animation_sequence = AnimationSequence::from(seq);
     (animation_sequence, now_f64())
 }
 
@@ -162,7 +164,7 @@ impl Simple {
 
 struct Fade {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     step: u16,
 }
 
@@ -193,13 +195,13 @@ impl Fade {
         }
         self.step = (256.0 * self.seq.now() as f64).trunc() as u16;
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Wave {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center: (u32, u32),
     sin: f64,
     cos: f64,
@@ -227,7 +229,7 @@ impl Wave {
         let offset = (sin.abs() * width as f64 + cos.abs() * height as f64) * 2.0;
         let a = circle_radius * cos;
         let b = circle_radius * sin;
-        let max_offset = circle_radius.pow(2) * 2.0;
+        let max_offset = circle_radius.powi(2) * 2.0;
 
         let (seq, start) = bezier_seq(transition, offset as f32, max_offset as f32);
 
@@ -335,13 +337,13 @@ impl Wave {
             });
         }
 
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Grow {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center_x: usize,
     center_y: usize,
     dist_center: f32,
@@ -362,7 +364,7 @@ impl Grow {
             if y < height / 2.0 {
                 y = height - 1.0 - y;
             }
-            f32::sqrt(x.pow(2) + y.pow(2))
+            f32::sqrt(x.powi(2) + y.powi(2))
         };
 
         let (center_x, center_y) = (center_x as usize, center_y as usize);
@@ -422,13 +424,13 @@ impl Grow {
 
         self.dist_center = self.seq.now();
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Outer {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center_x: usize,
     center_y: usize,
     dist_center: f32,
@@ -448,7 +450,7 @@ impl Outer {
             if y < height / 2.0 {
                 y = height - 1.0 - y;
             }
-            f32::sqrt(x.pow(2) + y.pow(2))
+            f32::sqrt(x.powi(2) + y.powi(2))
         };
         let (center_x, center_y) = (center_x as usize, center_y as usize);
 
@@ -507,7 +509,7 @@ impl Outer {
         }
         self.dist_center = self.seq.now();
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 

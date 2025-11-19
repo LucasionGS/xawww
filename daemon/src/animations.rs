@@ -12,6 +12,7 @@ use common::{
 
 use crate::{WaylandObject, wallpaper::WallpaperCell};
 
+mod keyframe;
 mod transitions;
 use transitions::Effect;
 
@@ -46,7 +47,7 @@ impl Animator {
             error!("image has wrong dimensions! Expect {expect:?}, actual {dim:?}");
             return None;
         }
-        let effect = Some(Effect::new(transition, dim));
+        let effect = Some(Box::new(Effect::new(transition, dim)));
         Some(Self {
             wallpapers,
             now: clock_gettime(ClockId::Monotonic),
@@ -110,7 +111,7 @@ impl Animator {
 
 struct Transition {
     fps_nanos: Nanos,
-    effect: Option<Effect>,
+    effect: Option<Box<Effect>>,
     img: MmappedBytes,
     animation: Option<ipc::Animation>,
 }
