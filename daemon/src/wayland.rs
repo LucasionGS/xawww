@@ -19,8 +19,8 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
             unsafe { waybackend::connect_from_fd(WaylandObject::Display, fd) }
         } else {
             panic!(
-                "Socket in WAYLAND_SOCKET has wrong family: {:?}",
-                socket_addr.address_family()
+                "Socket in WAYLAND_SOCKET has wrong family: {}",
+                socket_addr.address_family().as_raw()
             );
         }
     } else {

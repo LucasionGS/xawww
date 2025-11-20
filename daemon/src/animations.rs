@@ -44,7 +44,10 @@ impl Animator {
 
         let expect = wallpapers[0].borrow().get_dimensions();
         if dim != expect {
-            error!("image has wrong dimensions! Expect {expect:?}, actual {dim:?}");
+            error!(
+                "image has wrong dimensions! Expect {}x{}, actual {}x{}",
+                expect.0, expect.1, dim.0, dim.1
+            );
             return None;
         }
         let effect = Some(Box::new(Effect::new(transition, dim)));

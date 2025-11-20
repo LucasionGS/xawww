@@ -207,6 +207,23 @@ macro_rules! code {
             }
         }
 
+        impl core::fmt::Display for Code {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match self {
+                    Code::ReqPing       => f.write_str("ReqPing"),
+                    Code::ReqQuery      => f.write_str("ReqQuery"),
+                    Code::ReqClear      => f.write_str("ReqClear"),
+                    Code::ReqImg        => f.write_str("ReqImg"),
+                    Code::ReqKill       => f.write_str("ReqKill"),
+                    Code::ResOk         => f.write_str("ResOk"),
+                    Code::ResConfigured => f.write_str("ResConfigured"),
+                    Code::ResAwait      => f.write_str("ResAwait"),
+                    Code::ResInfo       => f.write_str("ResInfo"),
+                    Code::ReqPause      => f.write_str("ReqPause"),
+                }
+            }
+        }
+
     };
 }
 
@@ -293,7 +310,7 @@ impl IpcSocket {
         let shm = if len == 0 {
             debug_assert!(
                 !matches!(code, Code::ReqImg | Code::ReqClear | Code::ResInfo),
-                "Received: Code {code:?}, which should have sent a shm fd",
+                "Received: Code {code}, which should have sent a shm fd",
             );
             None
         } else {

@@ -116,7 +116,7 @@ impl Keyframe {
 impl core::fmt::Display for Keyframe {
     #[inline]
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
-        write!(f, "Keyframe at {:.2} s: {}", self.time, self.value)
+        write!(f, "Keyframe at {} s: {}", self.time, self.value)
     }
 }
 
@@ -125,7 +125,7 @@ impl core::fmt::Debug for Keyframe {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
         write!(
             f,
-            "Keyframe {{ value: {:?}, time: {:.2} }}",
+            "Keyframe {{ value: {}, time: {} }}",
             self.value, self.time
         )
     }

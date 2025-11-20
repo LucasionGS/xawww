@@ -120,6 +120,17 @@ pub enum PixelFormat {
     Argb = 3,
 }
 
+impl fmt::Display for PixelFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PixelFormat::Bgr => f.write_str("Bgr"),
+            PixelFormat::Rgb => f.write_str("Rgb"),
+            PixelFormat::Abgr => f.write_str("Abgr"),
+            PixelFormat::Argb => f.write_str("Argb"),
+        }
+    }
+}
+
 impl PixelFormat {
     #[inline]
     #[must_use]

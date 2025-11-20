@@ -430,7 +430,11 @@ impl Wallpaper {
     }
 
     pub fn set_img_info(&mut self, img_info: BgImg) {
-        debug!("output {:?} - drawing: {}", self.name, img_info);
+        debug!(
+            "output {} - drawing: {}",
+            self.name.as_deref().unwrap_or(""),
+            img_info
+        );
         self.img = img_info;
     }
 

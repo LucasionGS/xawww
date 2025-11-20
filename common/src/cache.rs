@@ -304,7 +304,7 @@ fn animation_filename<P: Arg>(
     pixel_format: PixelFormat,
 ) -> String {
     format!(
-        "{}__{}x{}_{}_{:?}",
+        "{}__{}x{}_{}_{}",
         path.to_string_lossy().replace('/', "_"),
         dimensions.0,
         dimensions.1,
