@@ -2,7 +2,8 @@
 //! them fail there is no point in continuing. All of the initialization code, for example, is full
 //! of `expects`, **on purpose**, because we **want** to unwind and exit when they happen
 
-#![no_main]
+#![cfg_attr(not(test), no_main)]
+#![cfg_attr(test, allow(unused))]
 
 mod animations;
 mod cli;
@@ -597,6 +598,7 @@ enum WaylandObject {
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[unsafe(no_mangle)]
+#[cfg(not(test))]
 pub extern "C" fn main(
     argc: core::ffi::c_long,
     argv: *const *const core::ffi::c_char,
