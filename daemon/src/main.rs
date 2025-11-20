@@ -7,6 +7,7 @@
 
 mod animations;
 mod cli;
+mod clock;
 mod output_info;
 mod systemd;
 mod wallpaper;
@@ -248,7 +249,7 @@ impl Daemon {
                 }
 
                 if !(time.tv_sec == 0 && time.tv_nsec == 0) {
-                    spin_sleep(time);
+                    sleep(time);
                 }
 
                 wallpaper::attach_buffers_and_damage_surfaces(
@@ -696,6 +697,8 @@ pub extern "C" fn main(
             Err(e) => panic!("{e}"),
         }
 
+        clock::reset();
+
         let wayland_event = !fds[0].revents().is_empty();
         let socket_event = !fds[1].revents().is_empty();
 
@@ -875,28 +878,16 @@ pub fn is_daemon_running(namespace: &str) -> Result<bool, IpcError> {
     }
 }
 
-/// copy-pasted from the `spin_sleep` crate on crates.io
-///
 /// This will sleep for an amount of time we can roughly expected the OS to still be precise enough
-/// for frame timing (125 us, currently).
-fn spin_sleep(duration: Timespec) {
+/// for frame timing (125 us, currently -- copy-pasted from the `spin_sleep` crate on crates.io).
+fn sleep(duration: Timespec) {
     const ACCURACY: Timespec = Timespec {
         tv_sec: 0,
         tv_nsec: 125_000,
     };
 
-    let start = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
-
     if duration > ACCURACY {
         let d = duration - ACCURACY;
         _ = rustix::thread::nanosleep(&d);
-    }
-
-    loop {
-        let now = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
-        if now - start >= duration {
-            break;
-        }
-        rustix::thread::sched_yield();
     }
 }

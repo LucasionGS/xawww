@@ -514,7 +514,7 @@ impl Outer {
 }
 
 fn now_f64() -> f64 {
-    let t = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+    let t = crate::clock::get();
     t.tv_sec as f64 + t.tv_nsec as f64 / 1_000_000_000.0
 }
 

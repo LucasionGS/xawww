@@ -2,7 +2,7 @@ use common::log::error;
 use smallvec::SmallVec;
 use waybackend::{Waybackend, objman::ObjectManager};
 
-use rustix::time::{ClockId, Timespec, clock_gettime};
+use rustix::time::Timespec;
 
 use common::{
     compression::Decompressor,
@@ -53,7 +53,7 @@ impl Animator {
         let effect = Some(Box::new(Effect::new(transition, dim)));
         Some(Self {
             wallpapers,
-            now: clock_gettime(ClockId::Monotonic),
+            now: crate::clock::get(),
             animator: AnimatorKind::Transition(Transition {
                 effect,
                 fps_nanos: Nanos::from_nanos(1_000_000_000 / transition.fps as u64),
@@ -71,7 +71,7 @@ impl Animator {
     }
 
     pub fn updt_time(&mut self) {
-        self.now = clock_gettime(ClockId::Monotonic);
+        self.now = crate::clock::get();
     }
 
     pub fn frame(
@@ -121,7 +121,7 @@ struct Transition {
 
 impl Transition {
     fn time_to_draw(&self, start: &Timespec) -> Timespec {
-        let now = clock_gettime(ClockId::Monotonic);
+        let now = crate::clock::get();
         let elapsed = now - *start;
         timespec_saturating_sub(self.fps_nanos.into_timespec(), elapsed)
     }
@@ -155,7 +155,7 @@ struct Animation {
 
 impl Animation {
     fn time_to_draw(&self, start: &Timespec) -> Timespec {
-        let now = clock_gettime(ClockId::Monotonic);
+        let now = crate::clock::get();
         let elapsed = now - *start;
         timespec_saturating_sub(
             self.animation.animation[self.i % self.animation.animation.len()]
