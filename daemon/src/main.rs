@@ -628,7 +628,7 @@ pub extern "C" fn main(
     let registry = objman.create(WaylandObject::Registry);
     let callback = objman.create(WaylandObject::Callback);
     let mut pending_outputs = Vec::new();
-    waybackend::roundtrip(
+    if let Err(e) = waybackend::roundtrip(
         &mut backend,
         &mut receiver,
         registry,
@@ -654,8 +654,11 @@ pub extern "C" fn main(
                 (wp_fractional_scale_manager_v1, FractionalScaler),
             );
         },
-    )
-    .unwrap();
+    ) {
+        // use panic here to force Display formatting, instead of Debug
+        // it both looks nicer and uses less code in the final binary
+        panic!("Roundtrip failed: {e}");
+    }
 
     // create the socket listener and setup the signal handlers
     // this will also return an error if there is an `awww-daemon` instance already

@@ -17,6 +17,7 @@ pub fn notify() -> io::Result<()> {
     Ok(())
 }
 
+#[cold]
 fn connect_notify_socket() -> io::Result<Option<rustix::fd::OwnedFd>> {
     let Some(socket_path) = common::getenv(c"NOTIFY_SOCKET") else {
         return Ok(None);
@@ -29,7 +30,7 @@ fn connect_notify_socket() -> io::Result<Option<rustix::fd::OwnedFd>> {
         None,
     )?;
 
-    let addr = net::SocketAddrUnix::new(socket_path.to_bytes())?;
+    let addr = net::SocketAddrUnix::new(socket_path)?;
     net::connect(&socket, &addr)?;
     Ok(Some(socket))
 }

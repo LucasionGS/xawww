@@ -29,7 +29,7 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
             c"wayland-0"
         });
 
-        let unix_addr = if socket_name.to_bytes()[0] == b'/' {
+        let unix_addr = if socket_name.to_bytes().first() == Some(&b'/') {
             rustix::net::SocketAddrUnix::new(socket_name).unwrap()
         } else {
             let mut socket_fullpath = common::path::PathBuf::new();
