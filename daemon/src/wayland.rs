@@ -11,7 +11,8 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
 
     if let Some(txt) = common::getenv(c"WAYLAND_SOCKET") {
         // We should connect to the provided WAYLAND_SOCKET
-        let fd = txt.to_str().map(str::parse::<i32>).unwrap().unwrap();
+        let fd =
+            parse_cstr_to_rawfd(txt).expect("file descriptor in WAYLAND_SOCKET is not a number");
 
         let fd = unsafe { OwnedFd::from_raw_fd(fd) };
         let socket_addr = rustix::net::getsockname(&fd).expect("failed to getsocketname");
@@ -57,5 +58,46 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
 
         waybackend::connect_to(WaylandObject::Display, socket, &unix_addr)
             .expect("failed to connect to socket")
+    }
+}
+
+/// This function is unlikely to run, as most wayland implementations use WAYLAND_DISPLAY, not
+/// WAYLAND_SOCKET
+///
+/// We are writting our own manual implementation because Rust cannot parse a `cstr` directly.
+/// Instead, it demands we first transform it to a str (which goes through a utf8 verification),
+/// and THEN try parsing the number, therefore generating code with 2 unwraps and panic conditions,
+/// even though 1 would suffice
+#[cold]
+fn parse_cstr_to_rawfd(s: &core::ffi::CStr) -> Option<rustix::fd::RawFd> {
+    let mut fd: rustix::fd::RawFd = 0;
+    let mut ptr = s.as_ptr();
+
+    loop {
+        let x = unsafe { ptr.read() } as core::ffi::c_int;
+        if x == 0 {
+            break;
+        } else if x < b'0' as core::ffi::c_int || x > b'9' as core::ffi::c_int {
+            return None;
+        }
+        fd = fd * 10 + (x - b'0' as core::ffi::c_int);
+        ptr = unsafe { ptr.add(1) };
+    }
+
+    Some(fd)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parse_wayland_socket_envvar() {
+        use super::parse_cstr_to_rawfd as parse;
+        assert_eq!(parse(c"1"), Some(1));
+        assert!(parse(c" 1").is_none());
+        assert!(parse(c"1 ").is_none());
+        assert_eq!(parse(c"5"), Some(5));
+        assert!(parse(c"5 ").is_none());
+        assert_eq!(parse(c"12"), Some(12));
+        assert_eq!(parse(c"165"), Some(165));
     }
 }
