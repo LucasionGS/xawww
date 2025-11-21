@@ -1,5 +1,11 @@
+use ::alloc::boxed::Box;
+use ::alloc::string::String;
+use ::alloc::vec::Vec;
+
 use core::fmt;
 use core::num::{NonZeroI32, NonZeroU8};
+
+use rustix::io;
 
 use crate::compression::BitPack;
 use crate::mmap::Mmap;
@@ -112,6 +118,17 @@ pub enum PixelFormat {
     /// Swap R and B channels at client, must extend pixel with an extra byte when displaying
     /// animations
     Argb = 3,
+}
+
+impl fmt::Display for PixelFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PixelFormat::Bgr => f.write_str("Bgr"),
+            PixelFormat::Rgb => f.write_str("Rgb"),
+            PixelFormat::Abgr => f.write_str("Abgr"),
+            PixelFormat::Argb => f.write_str("Argb"),
+        }
+    }
 }
 
 impl PixelFormat {
@@ -495,13 +512,12 @@ pub struct ClearSend {
 }
 
 impl ClearSend {
-    #[must_use]
-    pub fn create_request(self) -> Mmap {
+    pub fn create_request(self) -> io::Result<Mmap> {
         // 1 - output length
         // 4 - color bytes
         // 4 + output.len() - output len + bytes
         let len = 5 + self.outputs.iter().map(|o| 4 + o.len()).sum::<usize>();
-        let mut mmap = Mmap::create(len);
+        let mut mmap = Mmap::create(len)?;
         let bytes = mmap.slice_mut();
         // we assume someone does not have more than
         // 255 monitors. Seems reasonable
@@ -514,7 +530,7 @@ impl ClearSend {
             i += 4 + len as usize;
         }
         bytes[i..i + 4].copy_from_slice(&self.color);
-        mmap
+        Ok(mmap)
     }
 }
 

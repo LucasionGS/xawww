@@ -108,6 +108,10 @@ pub(crate) unsafe fn unpack_unsafe_bytes_4channels(buf: &mut [u8], diff: &[u8]) 
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+    use std::is_x86_feature_detected;
+    use std::vec::Vec;
+
     use super::*;
     use crate::compression::comp::pack_bytes;
 

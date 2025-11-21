@@ -1,19 +1,35 @@
+use ::alloc::boxed::Box;
+use ::alloc::string::{String, ToString};
+use ::alloc::vec::Vec;
+
 use core::time::Duration;
-use std::env;
-use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
-use std::sync::OnceLock;
 
 use rustix::fd::OwnedFd;
+use rustix::fs;
 use rustix::io::Errno;
 use rustix::net;
 use rustix::time::Timespec;
+
+use crate::log;
+use crate::path::Path;
+use crate::path::PathBuf;
 
 use super::ErrnoExt;
 use super::IpcError;
 use super::IpcErrorKind;
 
-static SOCKET_PATH: OnceLock<PathBuf> = OnceLock::new();
+fn get_socket_path_or_init() -> &'static Path {
+    static mut SOCKET_PATH: &core::ffi::CStr = c"";
+    static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+    if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
+        unsafe {
+            SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str())
+        };
+    }
+
+    Path::from_cstr(unsafe { SOCKET_PATH })
+}
 
 pub struct IpcSocket {
     fd: OwnedFd,
@@ -25,9 +41,7 @@ impl IpcSocket {
     /// TODO: remove external ability to construct [`Self`] from random file descriptors
     #[must_use]
     pub fn new(fd: OwnedFd) -> Self {
-        Self {
-            fd,
-        }
+        Self { fd }
     }
 
     #[must_use]
@@ -36,32 +50,29 @@ impl IpcSocket {
     }
 
     fn socket_file() -> PathBuf {
-        let mut runtime = env::var("XDG_RUNTIME_DIR").map_or_else(
-            |_| {
-                let mut p = PathBuf::from_iter(&["run", "user"]);
+        let mut runtime: PathBuf = crate::getenv(c"XDG_RUNTIME_DIR").map_or_else(
+            || {
+                use rustix::path::DecInt;
+                let mut p = PathBuf::from(c"/run/user");
                 let uid = rustix::process::getuid();
-                p.push(format!("{}", uid.as_raw()));
+                p.push_cstr(DecInt::new(uid.as_raw()).as_c_str());
                 p
             },
-            PathBuf::from,
+            <PathBuf as From<&core::ffi::CStr>>::from,
         );
 
-        let display = if let Ok(wayland_socket) = std::env::var("WAYLAND_DISPLAY") {
-            let mut i = 0;
-            // if WAYLAND_DISPLAY is a full path, use only its final component
-            for (j, ch) in wayland_socket.bytes().enumerate().rev() {
-                if ch == b'/' {
-                    i = j + 1;
-                    break;
-                }
+        if let Some(wayland_socket) = crate::getenv(c"WAYLAND_DISPLAY") {
+            let mut path = Path::from_cstr(wayland_socket);
+            if let Some(final_component) = path.file_name() {
+                path = Path::from_cstr(final_component);
             }
-            format!("{}-awww-daemon", &wayland_socket[i..])
+            runtime.push_cstr(path.as_c_str());
+            runtime.append_cstr(c"-awww-daemon");
         } else {
             log::warn!("WAYLAND_DISPLAY variable not set. Defaulting to wayland-0");
-            "wayland-0-awww-daemon".to_string()
-        };
+            runtime.push_cstr(c"wayland-0-awww-daemon");
+        }
 
-        runtime.push(display);
         runtime
     }
 
@@ -71,14 +82,16 @@ impl IpcSocket {
     /// [`Client`] or [`Server`] are recommended.
     #[must_use]
     pub fn path(namespace: &str) -> PathBuf {
-        let mut p = SOCKET_PATH.get_or_init(Self::socket_file).clone();
-        p.set_extension(format!("{namespace}.sock"));
+        let mut p = PathBuf::from(get_socket_path_or_init());
+        p.append_cstr(c".");
+        p.append_str(namespace);
+        p.append_cstr(c".sock");
         p
     }
 
     /// Retrieves all currently in-use namespaces
-    pub fn all_namespaces() -> std::io::Result<Vec<String>> {
-        let p = SOCKET_PATH.get_or_init(Self::socket_file).clone();
+    pub fn all_namespaces() -> rustix::io::Result<Vec<String>> {
+        let p = get_socket_path_or_init();
         let parent = match p.parent() {
             Some(parent) => parent,
             None => return Ok(Vec::new()),
@@ -86,30 +99,27 @@ impl IpcSocket {
 
         let filename = match p.file_name() {
             Some(filename) => {
-                let mut f = filename.to_os_string();
+                let mut path = PathBuf::from(filename);
                 // add a final '.' character, because the namespace is always preceded by a dot
                 // character
-                f.push(std::ffi::OsStr::from_bytes(b"."));
-                f
+                path.append_cstr(c".");
+                path
             }
-            None => {
-                return Err(std::io::Error::other(
-                    "socket path has invalid final component",
-                ));
-            }
+            None => return Err(Errno::NOENT),
         };
 
-        let dir_entries = parent.read_dir()?;
-        Ok(dir_entries
+        let dir = fs::Dir::new(fs::open(parent, fs::OFlags::RDONLY, fs::Mode::RUSR)?)?;
+
+        Ok(dir
             .into_iter()
             .flatten()
             .filter_map(|entry| {
                 core::str::from_utf8(
                     entry
                         .file_name()
-                        .as_encoded_bytes()
+                        .to_bytes()
                         .strip_suffix(b".sock")?
-                        .strip_prefix(filename.as_encoded_bytes())?,
+                        .strip_prefix(filename.as_c_str().to_bytes())?,
                 )
                 .map(ToString::to_string)
                 .ok()
@@ -139,7 +149,7 @@ impl IpcSocket {
         .context(IpcErrorKind::Socket)?;
 
         let path = Self::path(namespace);
-        let addr = net::SocketAddrUnix::new(&path).expect("addr is correct");
+        let addr = net::SocketAddrUnix::new(&path).context(IpcErrorKind::SocketAddr)?;
 
         // this will be overwritten, Rust just doesn't know it
         let mut error = Errno::INVAL;
@@ -163,8 +173,8 @@ impl IpcSocket {
             let _ = rustix::thread::nanosleep(&INTERVAL);
         }
 
-        let kind = if error.kind() == std::io::ErrorKind::NotFound {
-            IpcErrorKind::NoSocketFile(path)
+        let kind = if error == Errno::NOENT {
+            IpcErrorKind::NoSocketFile(path.into_boxed_path())
         } else {
             IpcErrorKind::Connect
         };
@@ -174,7 +184,8 @@ impl IpcSocket {
 
     /// Creates [`IpcSocket`] for use in server (i.e `Daemon`)
     pub fn server(namespace: &str) -> Result<Self, IpcError> {
-        let addr = net::SocketAddrUnix::new(Self::path(namespace)).expect("addr is correct");
+        let addr =
+            net::SocketAddrUnix::new(Self::path(namespace)).context(IpcErrorKind::SocketAddr)?;
         let socket = net::socket_with(
             net::AddressFamily::UNIX,
             net::SocketType::STREAM,

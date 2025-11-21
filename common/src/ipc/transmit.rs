@@ -1,3 +1,5 @@
+use ::alloc::vec::Vec;
+
 use core::mem::MaybeUninit;
 
 use rustix::io;
@@ -48,8 +50,10 @@ impl From<RequestSend> for RawMsg {
     }
 }
 
-impl From<Answer> for RawMsg {
-    fn from(value: Answer) -> Self {
+impl TryFrom<Answer> for RawMsg {
+    type Error = IpcError;
+
+    fn try_from(value: Answer) -> Result<Self, Self::Error> {
         let code = match value {
             Answer::Ok => Code::ResOk,
             Answer::Ping(true) => Code::ResConfigured,
@@ -59,7 +63,7 @@ impl From<Answer> for RawMsg {
 
         let shm = if let Answer::Info(infos) = value {
             let len = 1 + infos.iter().map(BgInfo::serialized_size).sum::<usize>();
-            let mut mmap = Mmap::create(len);
+            let mut mmap = Mmap::create(len).context(IpcErrorKind::MemoryMapCreation)?;
             let bytes = mmap.slice_mut();
 
             bytes[0] = infos.len() as u8;
@@ -74,7 +78,7 @@ impl From<Answer> for RawMsg {
             None
         };
 
-        Self { code, shm }
+        Ok(Self { code, shm })
     }
 }
 
@@ -203,6 +207,23 @@ macro_rules! code {
             }
         }
 
+        impl core::fmt::Display for Code {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match self {
+                    Code::ReqPing       => f.write_str("ReqPing"),
+                    Code::ReqQuery      => f.write_str("ReqQuery"),
+                    Code::ReqClear      => f.write_str("ReqClear"),
+                    Code::ReqImg        => f.write_str("ReqImg"),
+                    Code::ReqKill       => f.write_str("ReqKill"),
+                    Code::ResOk         => f.write_str("ResOk"),
+                    Code::ResConfigured => f.write_str("ResConfigured"),
+                    Code::ResAwait      => f.write_str("ResAwait"),
+                    Code::ResInfo       => f.write_str("ResInfo"),
+                    Code::ReqPause      => f.write_str("ReqPause"),
+                }
+            }
+        }
+
     };
 }
 
@@ -230,7 +251,9 @@ impl TryFrom<u64> for Code {
 
 // TODO: this along with `RawMsg` should be implementation detail
 impl IpcSocket {
-    pub fn send(&self, msg: RawMsg) -> io::Result<bool> {
+    pub fn send(&self, msg: RawMsg) -> Result<(), IpcError> {
+        const FLAGS: net::SendFlags = net::SendFlags::empty();
+
         let mut payload = [0u8; 16];
         payload[0..8].copy_from_slice(&msg.code.into().to_ne_bytes());
 
@@ -245,14 +268,20 @@ impl IpcSocket {
             ancillary.push(msg);
         }
 
-        let iov = io::IoSlice::new(&payload[..]);
-        net::sendmsg(
-            self.as_fd(),
-            &[iov],
-            &mut ancillary,
-            net::SendFlags::empty(),
-        )
-        .map(|written| written == payload.len())
+        let mut i = 0;
+        loop {
+            let iov = io::IoSlice::new(&payload[i..]);
+            i += net::sendmsg(self.as_fd(), &[iov], &mut ancillary, FLAGS)
+                .context(IpcErrorKind::Write)?;
+            if i >= payload.len() {
+                break;
+            } else if i >= 1 {
+                // posix in principle guarantees the ancillary data will be sent with the first
+                // data octet, so make user not to send it again
+                ancillary = net::SendAncillaryBuffer::new(&mut []);
+            }
+        }
+        Ok(())
     }
 
     pub fn recv(&self) -> Result<RawMsg, IpcError> {
@@ -281,7 +310,7 @@ impl IpcSocket {
         let shm = if len == 0 {
             debug_assert!(
                 !matches!(code, Code::ReqImg | Code::ReqClear | Code::ResInfo),
-                "Received: Code {code:?}, which should have sent a shm fd",
+                "Received: Code {code}, which should have sent a shm fd",
             );
             None
         } else {

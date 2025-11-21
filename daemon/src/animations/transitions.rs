@@ -3,12 +3,10 @@ use core::num::NonZeroU8;
 use crate::{WaylandObject, wallpaper::WallpaperCell};
 use common::ipc::{PixelFormat, Transition, TransitionType};
 
-use keyframe::{
-    AnimationSequence, functions::BezierCurve, keyframes, mint::Vector2, num_traits::Pow,
-};
+use super::keyframe::{AnimationSequence, Keyframe, Vector2, functions::BezierCurve};
 use waybackend::{Waybackend, objman::ObjectManager};
 
-fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence<f32>, f64) {
+fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequence, f64) {
     let bezier = BezierCurve::from(
         Vector2 {
             x: transition.bezier.0,
@@ -19,7 +17,11 @@ fn bezier_seq(transition: &Transition, start: f32, end: f32) -> (AnimationSequen
             y: transition.bezier.3,
         },
     );
-    let animation_sequence = keyframes![(start, 0.0, bezier), (end, transition.duration, bezier)];
+    let seq = [
+        Keyframe::new(start, 0.0, bezier),
+        Keyframe::new(end, transition.duration as f64, bezier),
+    ];
+    let animation_sequence = AnimationSequence::from(seq);
     (animation_sequence, now_f64())
 }
 
@@ -75,7 +77,6 @@ pub enum Effect {
     Simple(Simple),
     Fade(Fade),
     Wave(Wave),
-    Wipe(Wipe),
     Grow(Grow),
     Outer(Outer),
 }
@@ -86,9 +87,10 @@ impl Effect {
             TransitionType::Simple => Self::Simple(Simple::new(transition.step)),
             TransitionType::Fade => Self::Fade(Fade::new(transition)),
             TransitionType::Outer => Self::Outer(Outer::new(transition, dimensions)),
-            TransitionType::Wipe => Self::Wipe(Wipe::new(transition, dimensions)),
             TransitionType::Grow => Self::Grow(Grow::new(transition, dimensions)),
-            TransitionType::Wave => Self::Wave(Wave::new(transition, dimensions)),
+            TransitionType::Wipe | TransitionType::Wave => {
+                Self::Wave(Wave::new(transition, dimensions))
+            }
             TransitionType::None => Self::None(None),
         }
     }
@@ -106,7 +108,6 @@ impl Effect {
             Effect::Simple(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Fade(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Wave(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
-            Effect::Wipe(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Grow(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
             Effect::Outer(effect) => effect.run(backend, objman, pixel_format, wallpapers, img),
         };
@@ -120,7 +121,6 @@ impl Effect {
                 Effect::None(_) | Effect::Simple(_) => return true,
                 Effect::Fade(t) => Effect::Simple(Simple::new(new_nonzero(t.step as u8))),
                 Effect::Wave(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
-                Effect::Wipe(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
                 Effect::Grow(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
                 Effect::Outer(t) => Effect::Simple(Simple::new(new_nonzero(t.step.get()))),
             };
@@ -164,7 +164,7 @@ impl Simple {
 
 struct Fade {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     step: u16,
 }
 
@@ -195,13 +195,13 @@ impl Fade {
         }
         self.step = (256.0 * self.seq.now() as f64).trunc() as u16;
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Wave {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center: (u32, u32),
     sin: f64,
     cos: f64,
@@ -229,7 +229,7 @@ impl Wave {
         let offset = (sin.abs() * width as f64 + cos.abs() * height as f64) * 2.0;
         let a = circle_radius * cos;
         let b = circle_radius * sin;
-        let max_offset = circle_radius.pow(2) * 2.0;
+        let max_offset = circle_radius.powi(2) * 2.0;
 
         let (seq, start) = bezier_seq(transition, offset as f32, max_offset as f32);
 
@@ -337,105 +337,13 @@ impl Wave {
             });
         }
 
-        elapsed(self.start) > self.seq.duration()
-    }
-}
-
-struct Wipe {
-    start: f64,
-    seq: AnimationSequence<f32>,
-    center: (u32, u32),
-    circle_radius: f64,
-    a: f64,
-    b: f64,
-    step: NonZeroU8,
-}
-
-impl Wipe {
-    fn new(transition: &Transition, dimensions: (u32, u32)) -> Self {
-        let width = dimensions.0;
-        let height = dimensions.1;
-        let center = (width / 2, height / 2);
-        let screen_diag = ((width.pow(2) + height.pow(2)) as f64).sqrt();
-
-        let circle_radius = screen_diag / 2.0;
-        let max_offset = circle_radius.pow(2) * 2.0;
-
-        let angle = transition.angle.to_radians();
-
-        let offset = {
-            let (x, y) = angle.sin_cos();
-            (x.abs() * width as f64 + y.abs() * height as f64) * 2.0
-        };
-
-        let a = circle_radius * angle.cos();
-        let b = circle_radius * angle.sin();
-
-        let (seq, start) = bezier_seq(transition, offset as f32, max_offset as f32);
-
-        let step = transition.step;
-        Self {
-            start,
-            seq,
-            center,
-            circle_radius,
-            a,
-            b,
-            step,
-        }
-    }
-    fn run(
-        &mut self,
-        backend: &mut Waybackend,
-        objman: &mut ObjectManager<WaylandObject>,
-        pixel_format: PixelFormat,
-        wallpapers: &mut [WallpaperCell],
-        img: &[u8],
-    ) -> bool {
-        let Self {
-            center,
-            circle_radius,
-            a,
-            b,
-            step,
-            ..
-        } = *self;
-        let channels = pixel_format.channels() as usize;
-        let offset = self.seq.now() as f64;
-        self.seq.advance_to(elapsed(self.start));
-        for wallpaper in wallpapers.iter() {
-            let mut wallpaper = wallpaper.borrow_mut();
-            let dim = wallpaper.get_dimensions();
-            let width = dim.0 as usize;
-            let height = dim.1 as usize;
-            let stride = width * pixel_format.channels() as usize;
-            wallpaper.canvas_change(backend, objman, pixel_format, |canvas| {
-                // line formula: (x-h)*a + (y-k)*b + C = r^2
-                // https://www.desmos.com/calculator/vpvzk12yar
-                for line in 0..height {
-                    let y = ((height - line) as f64 - center.1 as f64) * b;
-                    let x = (circle_radius.powi(2) - y - offset) / a + center.0 as f64;
-                    let x = x.min(width as f64);
-                    let (col_begin, col_end) = if a.is_sign_negative() {
-                        (0usize, x as usize * channels)
-                    } else {
-                        (x as usize * channels, stride)
-                    };
-                    for col in col_begin..col_end {
-                        let old = unsafe { canvas.get_unchecked_mut(line * stride + col) };
-                        let new = unsafe { img.get_unchecked(line * stride + col) };
-                        change_byte(step, old, new);
-                    }
-                }
-            });
-        }
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Grow {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center_x: usize,
     center_y: usize,
     dist_center: f32,
@@ -456,7 +364,7 @@ impl Grow {
             if y < height / 2.0 {
                 y = height - 1.0 - y;
             }
-            f32::sqrt(x.pow(2) + y.pow(2))
+            f32::sqrt(x.powi(2) + y.powi(2))
         };
 
         let (center_x, center_y) = (center_x as usize, center_y as usize);
@@ -516,13 +424,13 @@ impl Grow {
 
         self.dist_center = self.seq.now();
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 struct Outer {
     start: f64,
-    seq: AnimationSequence<f32>,
+    seq: AnimationSequence,
     center_x: usize,
     center_y: usize,
     dist_center: f32,
@@ -542,7 +450,7 @@ impl Outer {
             if y < height / 2.0 {
                 y = height - 1.0 - y;
             }
-            f32::sqrt(x.pow(2) + y.pow(2))
+            f32::sqrt(x.powi(2) + y.powi(2))
         };
         let (center_x, center_y) = (center_x as usize, center_y as usize);
 
@@ -601,12 +509,12 @@ impl Outer {
         }
         self.dist_center = self.seq.now();
         self.seq.advance_to(elapsed(self.start));
-        elapsed(self.start) > self.seq.duration()
+        self.seq.finished()
     }
 }
 
 fn now_f64() -> f64 {
-    let t = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+    let t = crate::clock::get();
     t.tv_sec as f64 + t.tv_nsec as f64 / 1_000_000_000.0
 }
 

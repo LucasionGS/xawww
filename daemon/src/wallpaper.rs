@@ -1,8 +1,8 @@
 use common::{
     cache::{get_previous_image_cache, read_cache_file},
     ipc::{BgImg, BgInfo, PixelFormat, Scale},
+    log::{debug, error, warn},
 };
-use log::{debug, error, warn};
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 
 use core::num::NonZeroI32;
@@ -290,24 +290,40 @@ impl Wallpaper {
                         // Note: we do not need to wait for this command because we set SIGCHLD to
                         // SIG_IGN, and posix says that does not generate a zombie process (see
                         // `man 3p _EXIT`
-                        let ret = std::process::Command::new("awww")
-                            .arg("img")
-                            .args([
-                                "--outputs",
-                                output_name,
-                                "--resize",
-                                cache.resize,
-                                "--filter",
-                                cache.filter,
-                                // namespace needs a format because the empty namespace is valid, so we need to use the
-                                // `=` format
-                                &format!("--namespace={namespace}"),
-                                "--transition-type=none",
-                                cache.img_path,
-                            ])
-                            .spawn();
-                        if let Err(e) = ret {
-                            error!("failed to spawn child awww process to load the cache: {e}");
+
+                        unsafe extern "C" {
+                            static environ: *const *const core::ffi::c_char;
+                        }
+
+                        let cmd = format!(
+                            "exec awww img \
+                            --outputs='{output_name}' \
+                            --resize={} \
+                            --filter={} \
+                            --namespace='{namespace}' \
+                            --transition-type=none \
+                            '{}'\0",
+                            cache.resize, cache.filter, cache.img_path
+                        );
+                        match unsafe { rustix::runtime::kernel_fork() } {
+                            Ok(rustix::runtime::Fork::Child(_)) => {
+                                let args: [*const u8; 4] = [
+                                    c"sh".as_ptr().cast(),
+                                    c"-c".as_ptr().cast(),
+                                    cmd.as_ptr(),
+                                    core::ptr::null(),
+                                ];
+                                let err = unsafe {
+                                    rustix::runtime::execve(
+                                        c"/bin/sh",
+                                        args.as_ptr(),
+                                        environ as *const _,
+                                    )
+                                };
+                                panic!("execve failed: {err}");
+                            }
+                            Ok(rustix::runtime::Fork::ParentOf(_)) => (),
+                            Err(e) => error!("fork failed: {e}"),
                         }
                     }
                     Ok(None) => break 'brk,
@@ -320,10 +336,9 @@ impl Wallpaper {
         }
 
         let (width, height) = (self.width.get(), self.height.get());
-        log::debug!(
+        debug!(
             "Output {} new configuration: width: {width}, height: {height}, scale_factor: {}",
-            self.output_name,
-            self.scale_factor
+            self.output_name, self.scale_factor
         );
 
         wp_viewport::req::set_destination(backend, self.wp_viewport, width, height).unwrap();
@@ -415,27 +430,22 @@ impl Wallpaper {
     }
 
     pub fn set_img_info(&mut self, img_info: BgImg) {
-        debug!("output {:?} - drawing: {}", self.name, img_info);
+        debug!(
+            "output {} - drawing: {}",
+            self.name.as_deref().unwrap_or(""),
+            img_info
+        );
         self.img = img_info;
     }
 
     pub fn destroy(&mut self, backend: &mut Waybackend) {
         // Careful not to panic here, since we call this on drop
 
-        if let Err(e) = wp_viewport::req::destroy(backend, self.wp_viewport) {
-            error!("error destroying wp_viewport: {e:?}");
+        wp_viewport::req::destroy(backend, self.wp_viewport).unwrap();
+        if let Some(fractional) = self.wp_fractional {
+            wp_fractional_scale_v1::req::destroy(backend, fractional).unwrap();
         }
-
-        if let Some(fractional) = self.wp_fractional
-            && let Err(e) = wp_fractional_scale_v1::req::destroy(backend, fractional)
-        {
-            error!("error destroying wp_fractional_scale_v1: {e:?}");
-        }
-
-        if let Err(e) = zwlr_layer_surface_v1::req::destroy(backend, self.layer_surface) {
-            error!("error destroying zwlr_layer_surface_v1: {e:?}");
-        }
-
+        zwlr_layer_surface_v1::req::destroy(backend, self.layer_surface).unwrap();
         self.pool.destroy(backend);
 
         debug!(

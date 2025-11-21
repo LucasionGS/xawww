@@ -2,12 +2,17 @@
 //! them fail there is no point in continuing. All of the initialization code, for example, is full
 //! of `expects`, **on purpose**, because we **want** to unwind and exit when they happen
 
+#![cfg_attr(not(test), no_main)]
+#![cfg_attr(test, allow(unused))]
+
 mod animations;
 mod cli;
+mod clock;
 mod output_info;
+mod systemd;
 mod wallpaper;
 mod wayland;
-use log::{LevelFilter, debug, error, info, trace, warn};
+use common::log::{Filter, debug, error, info, trace, warn};
 use rustix::{fd::OwnedFd, fs::Timespec};
 
 use smallvec::SmallVec;
@@ -24,7 +29,7 @@ use core::{
 
 use animations::Animator;
 use common::ipc::{
-    Answer, BgInfo, ImageReq, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale,
+    Answer, BgInfo, ImageReq, IpcError, IpcSocket, PixelFormat, RequestRecv, RequestSend, Scale,
 };
 use common::mmap::MmappedStr;
 use output_info::OutputInfo;
@@ -244,7 +249,7 @@ impl Daemon {
                 }
 
                 if !(time.tv_sec == 0 && time.tv_nsec == 0) {
-                    spin_sleep(time);
+                    sleep(time);
                 }
 
                 wallpaper::attach_buffers_and_damage_surfaces(
@@ -565,15 +570,6 @@ impl wayland::wp_viewporter::EvHandler for Daemon {}
 impl wayland::wp_viewport::EvHandler for Daemon {}
 impl wayland::wp_fractional_scale_manager_v1::EvHandler for Daemon {}
 
-impl Drop for Daemon {
-    fn drop(&mut self) {
-        for wallpaper in &self.wallpapers {
-            let mut w = wallpaper.borrow_mut();
-            w.destroy(&mut self.backend);
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum WaylandObject {
     // standard stuff
@@ -601,25 +597,41 @@ enum WaylandObject {
     FractionalScale,
 }
 
-fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+#[cfg(not(test))]
+pub extern "C" fn main(
+    argc: core::ffi::c_long,
+    argv: *const *const core::ffi::c_char,
+) -> core::ffi::c_long {
     // first, get the command line arguments and make the logger
-    let cli = match cli::Cli::new() {
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    let cli = match cli::Cli::new(args) {
         Ok(Some(cli)) => cli,
-        Ok(None) => return Ok(std::process::ExitCode::SUCCESS),
+        Ok(None) => return 0,
         Err(e) => {
-            eprintln!("{e}");
-            return Ok(std::process::ExitCode::FAILURE);
+            let stderr = unsafe { rustix::stdio::stderr() };
+            let msg = e.to_string();
+            let bufs = [
+                rustix::io::IoSlice::new(msg.as_bytes()),
+                rustix::io::IoSlice::new(b"\n"),
+            ];
+            _ = rustix::io::writev(stderr, &bufs);
+            return -1;
         }
     };
-    make_logger(cli.quiet);
+    common::log::init(if cli.quiet {
+        Filter::Error
+    } else {
+        Filter::Info
+    });
 
     // next, initialize all wayland stuff
-    let (mut backend, mut objman, mut receiver) =
-        waybackend::connect::<WaylandObject>(WaylandObject::Display)?;
+    let (mut backend, mut objman, mut receiver) = wayland::connect();
     let registry = objman.create(WaylandObject::Registry);
     let callback = objman.create(WaylandObject::Callback);
     let mut pending_outputs = Vec::new();
-    waybackend::roundtrip(
+    if let Err(e) = waybackend::roundtrip(
         &mut backend,
         &mut receiver,
         registry,
@@ -645,21 +657,22 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
                 (wp_fractional_scale_manager_v1, FractionalScaler),
             );
         },
-    )
-    .unwrap();
+    ) {
+        // use panic here to force Display formatting, instead of Debug
+        // it both looks nicer and uses less code in the final binary
+        panic!("Roundtrip failed: {e}");
+    }
 
     // create the socket listener and setup the signal handlers
     // this will also return an error if there is an `awww-daemon` instance already
     // running
-    let listener = SocketWrapper::new(&cli.namespace)?;
+    let listener = SocketWrapper::new(&cli.namespace).unwrap();
     setup_signals();
 
     // use the initializer to create the Daemon, then drop it to free up the memory
     let mut daemon = Daemon::new(backend, objman, cli, pending_outputs);
 
-    if let Ok(true) = sd_notify::booted()
-        && let Err(e) = sd_notify::notify(true, &[sd_notify::NotifyState::Ready])
-    {
+    if let Err(e) = systemd::notify() {
         error!("Error sending status update to systemd: {e}");
     }
 
@@ -669,7 +682,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         use rustix::event::{PollFd, PollFlags};
         use wayland::*;
 
-        daemon.backend.flush()?;
+        daemon.backend.flush().unwrap();
 
         let mut fds = [
             PollFd::new(&daemon.backend.wayland_fd, PollFlags::IN),
@@ -681,14 +694,16 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
         match rustix::event::poll(&mut fds, daemon.poll_time.as_ref()) {
             Ok(_) => (),
             Err(rustix::io::Errno::INTR | rustix::io::Errno::WOULDBLOCK) => continue,
-            Err(e) => return Err(Box::new(e)),
+            Err(e) => panic!("{e}"),
         }
+
+        clock::reset();
 
         let wayland_event = !fds[0].revents().is_empty();
         let socket_event = !fds[1].revents().is_empty();
 
         if wayland_event {
-            let mut msgs = receiver.recv(&daemon.backend.wayland_fd)?;
+            let mut msgs = receiver.recv(&daemon.backend.wayland_fd).unwrap();
             while let Some(sender_id) = msgs.next() {
                 let sender_id = match sender_id {
                     Ok(sender_id) => sender_id,
@@ -736,7 +751,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
             match rustix::net::accept(&listener.fd) {
                 Ok(stream) => daemon.recv_socket_msg(IpcSocket::new(stream)),
                 Err(rustix::io::Errno::INTR | rustix::io::Errno::WOULDBLOCK) => continue,
-                Err(e) => return Err(Box::new(e)),
+                Err(e) => panic!("{e}"),
             }
         }
 
@@ -748,7 +763,7 @@ fn main() -> Result<std::process::ExitCode, Box<dyn core::error::Error>> {
     drop(daemon);
     drop(listener);
     info!("Goodbye!");
-    Ok(std::process::ExitCode::SUCCESS)
+    0
 }
 
 fn setup_signals() {
@@ -801,7 +816,7 @@ impl SocketWrapper {
         let addr = IpcSocket::path(namespace);
 
         if fs::access(&addr, fs::Access::EXISTS).is_ok() {
-            if is_daemon_running(namespace)? {
+            if is_daemon_running(namespace).map_err(|s| s.to_string())? {
                 return Err(
                     "There is an awww-daemon instance already running on this socket!".to_string(),
                 );
@@ -820,7 +835,7 @@ impl SocketWrapper {
             None => return Err("couldn't find a valid runtime directory".to_owned()),
         };
 
-        if fs::access(runtime_dir, fs::Access::EXISTS).is_err() {
+        if fs::access(&runtime_dir, fs::Access::EXISTS).is_err() {
             match fs::mkdir(runtime_dir, fs::Mode::RUSR.union(fs::Mode::WUSR)) {
                 Ok(()) => (),
                 Err(e) => return Err(format!("failed to create runtime dir: {e}")),
@@ -829,7 +844,7 @@ impl SocketWrapper {
 
         let socket = IpcSocket::server(namespace).map_err(|err| err.to_string())?;
 
-        debug!("Created socket in {}", addr.display());
+        debug!("Created socket at {}", addr.display());
         Ok(Self {
             fd: socket.to_fd(),
             namespace: namespace.to_string(),
@@ -847,74 +862,7 @@ impl Drop for SocketWrapper {
     }
 }
 
-struct Logger {
-    level_filter: LevelFilter,
-    is_term: bool,
-}
-
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.level_filter
-    }
-
-    fn log(&self, record: &log::Record) {
-        if self.enabled(record.metadata()) {
-            let level = if self.is_term {
-                match record.level() {
-                    log::Level::Error => "\x1b[31m[ERROR]\x1b[0m",
-                    log::Level::Warn => "\x1b[33m[WARN]\x1b[0m ",
-                    log::Level::Info => "\x1b[32m[INFO]\x1b[0m ",
-                    log::Level::Debug => "\x1b[36m[DEBUG]\x1b[0m",
-                    log::Level::Trace => "[TRACE]",
-                }
-            } else {
-                match record.level() {
-                    log::Level::Error => "[ERROR]",
-                    log::Level::Warn => "[WARN] ",
-                    log::Level::Info => "[INFO] ",
-                    log::Level::Debug => "[DEBUG]",
-                    log::Level::Trace => "[TRACE]",
-                }
-            };
-
-            let msg = record.args();
-            let msg = match msg.as_str() {
-                Some(s) => std::borrow::Cow::Borrowed(s),
-                None => std::borrow::Cow::Owned(msg.to_string()),
-            };
-
-            let stderr = rustix::stdio::stderr();
-            let bufs = [
-                rustix::io::IoSlice::new(level.as_bytes()),
-                rustix::io::IoSlice::new(b" "),
-                rustix::io::IoSlice::new(msg.as_bytes()),
-                rustix::io::IoSlice::new(b"\n"),
-            ];
-            _ = rustix::io::writev(stderr, &bufs);
-        }
-    }
-
-    fn flush(&self) {
-        //no op (we do not buffer anything)
-    }
-}
-
-fn make_logger(quiet: bool) {
-    let level_filter = if quiet {
-        LevelFilter::Error
-    } else {
-        LevelFilter::Debug
-    };
-
-    log::set_boxed_logger(Box::new(Logger {
-        level_filter,
-        is_term: rustix::termios::isatty(rustix::stdio::stderr()),
-    }))
-    .map(|()| log::set_max_level(level_filter))
-    .unwrap();
-}
-
-pub fn is_daemon_running(namespace: &str) -> Result<bool, String> {
+pub fn is_daemon_running(namespace: &str) -> Result<bool, IpcError> {
     let sock = match IpcSocket::client(namespace) {
         Ok(s) => s,
         // likely a connection refused; either way, this is a reliable signal there's no surviving
@@ -923,35 +871,23 @@ pub fn is_daemon_running(namespace: &str) -> Result<bool, String> {
     };
 
     RequestSend::Ping.send(&sock)?;
-    let answer = Answer::receive(sock.recv().map_err(|err| err.to_string())?);
+    let answer = Answer::receive(sock.recv()?);
     match answer {
         Answer::Ping(_) => Ok(true),
-        _ => Err("Daemon did not return Answer::Ping, as expected".to_string()),
+        _ => panic!("Daemon did not return Answer::Ping, as expected"),
     }
 }
 
-/// copy-pasted from the `spin_sleep` crate on crates.io
-///
 /// This will sleep for an amount of time we can roughly expected the OS to still be precise enough
-/// for frame timing (125 us, currently).
-fn spin_sleep(duration: Timespec) {
+/// for frame timing (125 us, currently -- copy-pasted from the `spin_sleep` crate on crates.io).
+fn sleep(duration: Timespec) {
     const ACCURACY: Timespec = Timespec {
         tv_sec: 0,
         tv_nsec: 125_000,
     };
 
-    let start = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
-
     if duration > ACCURACY {
         let d = duration - ACCURACY;
         _ = rustix::thread::nanosleep(&d);
-    }
-
-    loop {
-        let now = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
-        if now - start >= duration {
-            break;
-        }
-        rustix::thread::sched_yield();
     }
 }

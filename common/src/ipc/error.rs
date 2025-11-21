@@ -1,8 +1,9 @@
-use core::error::Error;
 use core::fmt;
-use std::path::PathBuf;
 
+use alloc::boxed::Box;
 use rustix::io::Errno;
+
+use crate::path::Path;
 
 /// Failures if IPC with added context
 #[derive(Debug)]
@@ -19,6 +20,8 @@ impl IpcError {
 
 #[derive(Debug)]
 pub enum IpcErrorKind {
+    /// Socket address is incorrect
+    SocketAddr,
     /// Failed to create file descriptor
     Socket,
     /// Failed to connect to socket
@@ -28,50 +31,47 @@ pub enum IpcErrorKind {
     /// Listening on socket failed
     Listen,
     /// Socket file wasn't found
-    NoSocketFile(PathBuf),
+    NoSocketFile(Box<Path>),
     /// Socket timeout couldn't be set
     SetTimeout,
     /// IPC contained invalid identification code
     BadCode,
     /// IPC payload was broken
     MalformedMsg,
+    /// Failed to create memory map
+    MemoryMapCreation,
     /// Reading socket failed
     Read,
-}
-
-impl IpcErrorKind {
-    fn description(&self) -> String {
-        match self {
-            Self::Socket => "failed to create socket file descriptor".to_string(),
-            Self::Connect => "failed to connect to socket".to_string(),
-            Self::Bind => "failed to bind to socket".to_string(),
-            Self::Listen => "failed to listen on socket".to_string(),
-            Self::NoSocketFile(path) => {
-                format!(
-                    "Socket file '{}' not found. Make sure awww-daemon is running, \
-                    and that the --namespace argument matches for the client and the daemon",
-                    path.display()
-                )
-            }
-            Self::SetTimeout => "failed to set read timeout for socket".to_string(),
-            Self::BadCode => "invalid message code".to_string(),
-            Self::MalformedMsg => "malformed ancillary message".to_string(),
-            Self::Read => "failed to receive message".to_string(),
-        }
-    }
+    /// Writing socket failed
+    Write,
 }
 
 impl fmt::Display for IpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.kind.description())
+        let Self { err, kind } = self;
+        match kind {
+            IpcErrorKind::SocketAddr => write!(f, "socket address is incorrect: {err}"),
+            IpcErrorKind::Socket => write!(f, "failed to create socket file descriptor: {err}"),
+            IpcErrorKind::Connect => write!(f, "failed to connect to socket: {err}"),
+            IpcErrorKind::Bind => write!(f, "failed to bind to socket: {err}"),
+            IpcErrorKind::Listen => write!(f, "failed to listen on socket: {err}"),
+            IpcErrorKind::NoSocketFile(path) => write!(
+                f,
+                "Socket file '{}' not found. Make sure awww-daemon is running, \
+                    and that the --namespace argument matches for the client and the daemon",
+                path.display()
+            ),
+            IpcErrorKind::SetTimeout => write!(f, "failed to set read timeout for socket: {err}"),
+            IpcErrorKind::BadCode => write!(f, "invalid message code: {err}"),
+            IpcErrorKind::MalformedMsg => write!(f, "malformed ancillary message: {err}"),
+            IpcErrorKind::MemoryMapCreation => write!(f, "failed to create memory map: {err}"),
+            IpcErrorKind::Read => write!(f, "failed to receive message: {err}"),
+            IpcErrorKind::Write => write!(f, "failed to write message: {err}"),
+        }
     }
 }
 
-impl Error for IpcError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.err)
-    }
-}
+impl core::error::Error for IpcError {}
 
 /// Simplify generating [`IpcError`]s from [`Errno`]
 pub(crate) trait ErrnoExt {

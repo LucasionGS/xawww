@@ -1,5 +1,8 @@
 use crate::wayland::zwlr_layer_shell_v1::Layer;
 use common::ipc::PixelFormat;
+use common::log;
+use core::ffi::CStr;
+use std::borrow::Cow;
 
 pub struct Cli {
     pub format: Option<PixelFormat>,
@@ -10,49 +13,54 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub fn new() -> Result<Option<Self>, CliError> {
+    pub fn new(args: &[*const core::ffi::c_char]) -> Result<Option<Self>, CliError> {
         let mut quiet = false;
         let mut no_cache = false;
         let mut format = None;
         let mut layer = Layer::background;
         let mut namespace = String::new();
-        let mut args = std::env::args();
+        let mut args = args
+            .iter()
+            .map(|arg| unsafe { CStr::from_ptr(*arg) }.to_bytes());
         args.next(); // skip the first argument
 
         while let Some(arg) = args.next() {
-            match arg.as_str() {
-                "-f" | "--format" => match args.next().as_deref() {
-                    Some("argb") => format = Some(PixelFormat::Argb),
-                    Some("xrgb") => {
-                        eprintln!(
-                            "WARNING: xrgb is deprecated. Use `--format argb` instead.\n\
-                            Note this is the default, so you can also just omit it."
+            match arg {
+                b"-f" | b"--format" => match args.next() {
+                    Some(b"argb") => format = Some(PixelFormat::Argb),
+                    Some(b"xrgb") => {
+                        log::warn!(
+                            "xrgb is deprecated. Use `--format argb` instead.\n\
+                            \tNote this is the default, so you can also just omit it."
                         );
                         format = Some(PixelFormat::Argb);
                     }
-                    Some("abgr") => format = Some(PixelFormat::Abgr),
-                    Some("rgb") => format = Some(PixelFormat::Rgb),
-                    Some("bgr") => format = Some(PixelFormat::Bgr),
+                    Some(b"abgr") => format = Some(PixelFormat::Abgr),
+                    Some(b"rgb") => format = Some(PixelFormat::Rgb),
+                    Some(b"bgr") => format = Some(PixelFormat::Bgr),
                     None => return Err(CliError::AbsentFormat),
-                    Some(other) => return Err(CliError::UnrecognizedFormat(other.to_string())),
+                    Some(other) => {
+                        return Err(CliError::UnrecognizedFormat(String::from_utf8_lossy(other)));
+                    }
                 },
-                "-l" | "--layer" => match args.next().as_deref() {
-                    Some("background") => layer = Layer::background,
-                    Some("bottom") => layer = Layer::bottom,
+                b"-l" | b"--layer" => match args.next() {
+                    Some(b"background") => layer = Layer::background,
+                    Some(b"bottom") => layer = Layer::bottom,
                     None => return Err(CliError::AbsentLayer),
-                    Some(other) => return Err(CliError::UnrecognizedLayer(other.to_string())),
+                    Some(other) => {
+                        return Err(CliError::UnrecognizedLayer(String::from_utf8_lossy(other)));
+                    }
                 },
-                "-n" | "--namespace" => {
+                b"-n" | b"--namespace" => {
                     namespace = match args.next() {
-                        Some(s) => s,
+                        Some(s) => String::from_utf8_lossy(s).to_string(),
                         None => return Err(CliError::AbsentNamespace),
                     }
                 }
-                "--no-cache" => no_cache = true,
-                "-q" | "--quiet" => quiet = true,
-                "-h" | "--help" => {
-                    println!(
-                        "\
+                b"--no-cache" => no_cache = true,
+                b"-q" | b"--quiet" => quiet = true,
+                b"-h" | b"--help" => {
+                    let msg = b"\
 awww-daemon
 
 Options:
@@ -92,15 +100,26 @@ Options:
 
     -q|--quiet    will only log errors
     -h|--help     print help
-    -V|--version  print version"
-                    );
+    -V|--version  print version\n";
+                    let stdout = unsafe { rustix::stdio::stdout() };
+                    _ = rustix::io::write(stdout, msg);
                     return Ok(None);
                 }
-                "-V" | "--version" => {
-                    println!("awww-daemon {}", env!("CARGO_PKG_VERSION"));
+                b"-V" | b"--version" => {
+                    let stdout = unsafe { rustix::stdio::stdout() };
+                    let bufs = [
+                        rustix::io::IoSlice::new(b"awww-daemon "),
+                        rustix::io::IoSlice::new(env!("CARGO_PKG_VERSION").as_bytes()),
+                        rustix::io::IoSlice::new(b"\n"),
+                    ];
+                    _ = rustix::io::writev(stdout, &bufs);
                     return Ok(None);
                 }
-                other => return Err(CliError::UnrecognizedArgument(other.to_string())),
+                other => {
+                    return Err(CliError::UnrecognizedArgument(String::from_utf8_lossy(
+                        other,
+                    )));
+                }
             }
         }
 
@@ -117,11 +136,11 @@ Options:
 #[derive(Debug)]
 pub enum CliError {
     AbsentFormat,
-    UnrecognizedFormat(String),
+    UnrecognizedFormat(Cow<'static, str>),
     AbsentLayer,
-    UnrecognizedLayer(String),
+    UnrecognizedLayer(Cow<'static, str>),
     AbsentNamespace,
-    UnrecognizedArgument(String),
+    UnrecognizedArgument(Cow<'static, str>),
 }
 
 impl core::fmt::Display for CliError {

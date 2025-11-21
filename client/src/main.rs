@@ -12,7 +12,7 @@ mod cli;
 use cli::{Awww, CliImage, Filter, ResizeStrategy};
 
 fn main() -> Result<(), String> {
-    make_logger();
+    common::log::init(common::log::Filter::Trace);
     let awww = Awww::parse();
 
     let all = match &awww {
@@ -47,7 +47,7 @@ fn main() -> Result<(), String> {
     for namespace in &namespaces {
         let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
         loop {
-            RequestSend::Ping.send(&socket)?;
+            RequestSend::Ping.send(&socket).map_err(|e| e.to_string())?;
             let bytes = socket.recv().map_err(|err| err.to_string())?;
             let answer = Answer::receive(bytes);
             if let Answer::Ping(configured) = answer {
@@ -111,7 +111,7 @@ fn process_awww_args(args: &Awww, namespace: &str) -> Result<Option<Box<[BgInfo]
         None => return Ok(None),
     };
     let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
-    request.send(&socket)?;
+    request.send(&socket).map_err(|e| e.to_string())?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
     match Answer::receive(bytes) {
@@ -158,7 +158,9 @@ fn make_request(args: &Awww, namespace: &str) -> Result<Option<RequestSend>, Str
                 color,
                 outputs: split_cmdline_outputs(&c.outputs),
             };
-            Ok(Some(RequestSend::Clear(clear.create_request())))
+            Ok(Some(RequestSend::Clear(
+                clear.create_request().map_err(|e| e.to_string())?,
+            )))
         }
         Awww::Restore(restore) => {
             let requested_outputs = split_cmdline_outputs(&restore.outputs);
@@ -190,7 +192,8 @@ fn make_img_request(
     outputs: &[Vec<String>],
 ) -> Result<Mmap, String> {
     let transition = make_transition(img);
-    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition);
+    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition)
+        .map_err(|e| format!("failed to create ImageRequestBuilder: {e}"))?;
 
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
@@ -359,7 +362,9 @@ fn get_format_dims_and_outputs(
     let mut imgs: Vec<ipc::BgImg> = Vec::new();
 
     let socket = IpcSocket::client(namespace).map_err(|err| err.to_string())?;
-    RequestSend::Query.send(&socket)?;
+    RequestSend::Query
+        .send(&socket)
+        .map_err(|e| e.to_string())?;
     let bytes = socket.recv().map_err(|err| err.to_string())?;
     drop(socket);
     let answer = Answer::receive(bytes);
@@ -453,76 +458,4 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
         namespace,
     )?;
     Ok(())
-}
-
-struct Logger {
-    level_filter: log::LevelFilter,
-    is_term: bool,
-}
-
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.level_filter
-    }
-
-    fn log(&self, record: &log::Record) {
-        if self.enabled(record.metadata()) {
-            let level = if self.is_term {
-                match record.level() {
-                    log::Level::Error => "\x1b[31m[ERROR]\x1b[0m",
-                    log::Level::Warn => "\x1b[33m[WARN]\x1b[0m ",
-                    log::Level::Info => "\x1b[32m[INFO]\x1b[0m ",
-                    log::Level::Debug => "\x1b[36m[DEBUG]\x1b[0m",
-                    log::Level::Trace => "[TRACE]",
-                }
-            } else {
-                match record.level() {
-                    log::Level::Error => "[ERROR]",
-                    log::Level::Warn => "[WARN] ",
-                    log::Level::Info => "[INFO] ",
-                    log::Level::Debug => "[DEBUG]",
-                    log::Level::Trace => "[TRACE]",
-                }
-            };
-
-            let msg = record.args();
-            let msg = match msg.as_str() {
-                Some(s) => std::borrow::Cow::Borrowed(s),
-                None => std::borrow::Cow::Owned(msg.to_string()),
-            };
-
-            let stderr = rustix::stdio::stderr();
-            let bufs = [
-                rustix::io::IoSlice::new(level.as_bytes()),
-                rustix::io::IoSlice::new(b" "),
-                rustix::io::IoSlice::new(msg.as_bytes()),
-                rustix::io::IoSlice::new(b"\n"),
-            ];
-            _ = rustix::io::writev(stderr, &bufs);
-        }
-    }
-
-    fn flush(&self) {
-        //no op (we do not buffer anything)
-    }
-}
-
-fn make_logger() {
-    let level_filter = {
-        #[cfg(not(debug_assertions))]
-        {
-            log::LevelFilter::Error
-        }
-        #[cfg(debug_assertions)]
-        {
-            log::LevelFilter::Debug
-        }
-    };
-
-    log::set_boxed_logger(Box::new(Logger {
-        level_filter,
-        is_term: rustix::termios::isatty(rustix::stdio::stderr()),
-    }))
-    .map(|()| log::set_max_level(level_filter))
-    .unwrap();
 }

@@ -1,4 +1,4 @@
-use common::{ipc::PixelFormat, mmap::Mmap};
+use common::{ipc::PixelFormat, log, mmap::Mmap};
 use smallvec::SmallVec;
 use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
 
@@ -69,7 +69,7 @@ pub struct BumpPool {
     dead_buffers: SmallVec<[ObjectId; 4]>,
     width: i32,
     height: i32,
-    last_used_buffer: usize,
+    last_used_buffer: u32,
 }
 
 impl BumpPool {
@@ -83,10 +83,9 @@ impl BumpPool {
         pixel_format: PixelFormat,
     ) -> Self {
         let len = width as usize * height as usize * pixel_format.channels() as usize;
-        let mmap = Mmap::create(len);
+        let mmap = Mmap::create(len).expect("failed to create memory map");
         let pool_id = objman.create(WaylandObject::ShmPool);
-        wl_shm::req::create_pool(backend, shm, pool_id, &mmap.fd(), len as i32)
-            .expect("failed to create WlShmPool object");
+        wl_shm::req::create_pool(backend, shm, pool_id, &mmap.fd(), len as i32).unwrap();
         Self {
             pool_id,
             mmap,
@@ -174,7 +173,7 @@ impl BumpPool {
         log::info!(
             "BumpPool with: {} buffers. Size: {}Kb",
             self.buffers.len(),
-            self.mmap.len() / 1024
+            self.mmap.len() >> 10
         );
     }
 
@@ -187,13 +186,8 @@ impl BumpPool {
         objman: &mut ObjectManager<WaylandObject>,
         pixel_format: PixelFormat,
     ) -> &mut [u8] {
-        let i = match self
-            .buffers
-            .iter_mut()
-            .enumerate()
-            .find(|(_, b)| b.is_released())
-        {
-            Some((i, _)) => i,
+        let i = match self.buffers.iter().position(Buffer::is_released) {
+            Some(i) => i,
             None => {
                 self.grow(backend, objman, pixel_format);
                 self.buffers.len() - 1
@@ -203,8 +197,8 @@ impl BumpPool {
         let len = self.buffer_len(pixel_format);
         let offset = self.buffer_offset(i, pixel_format);
 
-        if self.last_used_buffer != i {
-            let last_offset = self.buffer_offset(self.last_used_buffer, pixel_format);
+        if self.last_used_buffer != i as u32 {
+            let last_offset = self.buffer_offset(self.last_used_buffer as usize, pixel_format);
             unsafe {
                 let ptr = self.mmap.slice_mut().as_mut_ptr();
                 // SAFETY: buffer_offset always calculates the offset as a multiple of buffer_len.
@@ -212,15 +206,19 @@ impl BumpPool {
                 // can never overlap
                 core::ptr::copy_nonoverlapping(ptr.add(last_offset), ptr.add(offset), len);
             }
-            self.last_used_buffer = i;
+            self.last_used_buffer = i as u32;
         }
 
-        &mut self.mmap.slice_mut()[offset..offset + len]
+        unsafe {
+            self.mmap
+                .slice_mut()
+                .get_unchecked_mut(offset..offset + len)
+        }
     }
 
     /// gets the last buffer we've drawn to
     pub fn get_committable_buffer(&mut self) -> ObjectId {
-        let buf = &mut self.buffers[self.last_used_buffer];
+        let buf = &mut self.buffers[self.last_used_buffer as usize];
         buf.unset_released();
         buf.object_id
     }
@@ -251,9 +249,7 @@ impl BumpPool {
             destroy_buffer(buffer, backend);
         }
 
-        if let Err(e) = wl_shm_pool::req::destroy(backend, self.pool_id) {
-            log::error!("failed to destroy wl_shm_pool: {e}");
-        }
+        wl_shm_pool::req::destroy(backend, self.pool_id).unwrap();
     }
 
     pub fn width(&self) -> i32 {
@@ -267,9 +263,7 @@ impl BumpPool {
 
 fn destroy_buffer(buffer: ObjectId, backend: &mut Waybackend) {
     log::debug!("Destroying buffer with id: {buffer}");
-    if let Err(e) = crate::wayland::wl_buffer::req::destroy(backend, buffer) {
-        log::error!("failed to destroy wl_buffer: {e:?}");
-    }
+    crate::wayland::wl_buffer::req::destroy(backend, buffer).unwrap();
 }
 
 const fn wl_shm_format(pixel_format: PixelFormat) -> wl_shm::Format {

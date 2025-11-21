@@ -2,6 +2,9 @@
 //!
 //! Our compression strategy is documented in `comp/mod.rs`
 
+use ::alloc::boxed::Box;
+use ::alloc::vec::Vec;
+
 use core::ffi::{c_char, c_int};
 
 use crate::ipc::ImageRequestBuilder;
@@ -122,9 +125,11 @@ impl Compressor {
             {
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
-                    if is_x86_feature_detected!("avx2") {
+                    cpufeatures::new!(avx2, "avx2");
+                    cpufeatures::new!(sse2, "sse2");
+                    if avx2::get() {
                         break 'brk comp::avx2::pack_bytes;
-                    } else if is_x86_feature_detected!("sse2") {
+                    } else if sse2::get() {
                         break 'brk comp::sse2::pack_bytes;
                     }
                 }
@@ -224,8 +229,8 @@ impl Drop for Decompressor {
     #[inline]
     fn drop(&mut self) {
         if self.cap > 0 {
-            let layout = std::alloc::Layout::array::<u8>(self.cap).unwrap();
-            unsafe { std::alloc::dealloc(self.ptr.as_ptr(), layout) }
+            let layout = ::alloc::alloc::Layout::array::<u8>(self.cap).unwrap();
+            unsafe { ::alloc::alloc::dealloc(self.ptr.as_ptr(), layout) }
         }
     }
 }
@@ -245,14 +250,14 @@ impl Decompressor {
             {
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
-                    if is_x86_feature_detected!("avx512vbmi2")
-                        && is_x86_feature_detected!("avx512bw")
-                    {
+                    cpufeatures::new!(avx512, "avx512vbmi2", "avx512bw");
+                    cpufeatures::new!(ssse3, "ssse3");
+                    if avx512::get() {
                         break 'brk (
                             decomp::avx512::unpack_bytes_4channels,
                             decomp::avx512::unpack_unsafe_bytes_4channels,
                         );
-                    } else if is_x86_feature_detected!("ssse3") {
+                    } else if ssse3::get() {
                         break 'brk (
                             decomp::ssse3::unpack_bytes_4channels,
                             decomp::ssse3::unpack_unsafe_bytes_4channels,
@@ -282,20 +287,21 @@ impl Decompressor {
         }
 
         let ptr = if self.cap == 0 {
-            let layout = std::alloc::Layout::array::<u8>(goal).unwrap();
-            let p = unsafe { std::alloc::alloc(layout) };
+            let layout = ::alloc::alloc::Layout::array::<u8>(goal).unwrap();
+            let p = unsafe { ::alloc::alloc::alloc(layout) };
             match core::ptr::NonNull::new(p) {
                 Some(p) => p,
-                None => std::alloc::handle_alloc_error(layout),
+                None => ::alloc::alloc::handle_alloc_error(layout),
             }
         } else {
-            let old_layout = std::alloc::Layout::array::<u8>(self.cap).unwrap();
-            let new_layout = std::alloc::Layout::array::<u8>(goal).unwrap();
-            let p =
-                unsafe { std::alloc::realloc(self.ptr.as_ptr(), old_layout, new_layout.size()) };
+            let old_layout = ::alloc::alloc::Layout::array::<u8>(self.cap).unwrap();
+            let new_layout = ::alloc::alloc::Layout::array::<u8>(goal).unwrap();
+            let p = unsafe {
+                ::alloc::alloc::realloc(self.ptr.as_ptr(), old_layout, new_layout.size())
+            };
             match core::ptr::NonNull::new(p) {
                 Some(p) => p,
-                None => std::alloc::handle_alloc_error(new_layout),
+                None => ::alloc::alloc::handle_alloc_error(new_layout),
             }
         };
 

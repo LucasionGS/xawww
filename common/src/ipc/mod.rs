@@ -1,3 +1,8 @@
+use ::alloc::boxed::Box;
+use ::alloc::string::String;
+
+use rustix::io;
+
 use transmit::RawMsg;
 
 mod error;
@@ -6,6 +11,7 @@ mod transmit;
 mod types;
 
 use crate::cache;
+use crate::log;
 use crate::mmap::Mmap;
 pub use error::*;
 pub use socket::*;
@@ -20,9 +26,8 @@ pub struct ImageRequestBuilder {
 
 impl ImageRequestBuilder {
     #[inline]
-    #[must_use]
-    pub fn new(transition: Transition) -> Self {
-        let memory = Mmap::create(1 << (20 + 3)); // start with 8 MB
+    pub fn new(transition: Transition) -> io::Result<Self> {
+        let memory = Mmap::create(1 << (20 + 3))?; // start with 8 MB
         let len = 0;
         let mut builder = Self {
             memory,
@@ -34,7 +39,7 @@ impl ImageRequestBuilder {
         builder.img_count_index = builder.len;
         builder.len += 1;
         assert_eq!(builder.len, 52);
-        builder
+        Ok(builder)
     }
 
     fn push_byte(&mut self, byte: u8) {
@@ -103,17 +108,14 @@ impl ImageRequestBuilder {
             }
         }
 
-        if animation.is_some()
-            && path != "-"
-            && let Err(e) = cache::store_animation_frames(
-                &self.memory.slice()[animation_start..],
-                &path,
-                *dims,
-                resize,
-                *format,
-            )
-        {
-            log::error!("failed storing cache for {path}: {e}");
+        if animation.is_some() && path != "-" {
+            let animation = &self.memory.slice()[animation_start..];
+            let mut buf = crate::path::PathBuf::new();
+            buf.append_str(path.as_str());
+            let path = buf.as_path();
+            if let Err(e) = cache::store_animation_frames(animation, path, *dims, resize, *format) {
+                log::error!("failed storing cache for {}: {e}", path.display());
+            }
         }
     }
 
@@ -148,12 +150,8 @@ pub enum RequestRecv {
 }
 
 impl RequestSend {
-    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
-        match stream.send(self.into()) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err("failed to send full length of message in socket!".to_string()),
-            Err(e) => Err(format!("failed to write serialized request: {e}")),
-        }
+    pub fn send(self, stream: &IpcSocket) -> Result<(), IpcError> {
+        stream.send(self.into())
     }
 }
 
@@ -172,12 +170,8 @@ pub enum Answer {
 }
 
 impl Answer {
-    pub fn send(self, stream: &IpcSocket) -> Result<(), String> {
-        match stream.send(self.into()) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err("failed to send full length of message in socket!".to_string()),
-            Err(e) => Err(format!("failed to write serialized request: {e}")),
-        }
+    pub fn send(self, stream: &IpcSocket) -> Result<(), IpcError> {
+        stream.send(self.try_into()?)
     }
 
     #[must_use]
