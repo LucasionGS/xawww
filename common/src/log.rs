@@ -1,7 +1,8 @@
 use ::alloc::string::ToString;
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-static mut IS_TTY: bool = false;
-static mut FILTER: Filter = Filter::Fatal;
+static IS_TTY: AtomicBool = AtomicBool::new(false);
+static FILTER: AtomicU8 = AtomicU8::new(Filter::Fatal as u8);
 
 #[cfg(debug_assertions)]
 pub const MIN_LEVEL: Filter = Filter::Trace;
@@ -10,6 +11,7 @@ pub const MIN_LEVEL: Filter = Filter::Trace;
 pub const MIN_LEVEL: Filter = Filter::Info;
 
 #[repr(u8)]
+#[derive(Clone, Copy)]
 pub enum Filter {
     Trace = 0,
     Debug = 1,
@@ -20,22 +22,22 @@ pub enum Filter {
 }
 
 pub fn init(filter: Filter) {
-    static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
-
-    if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
-        unsafe {
-            let stderr = rustix::stdio::stderr();
-            IS_TTY = rustix::termios::isatty(stderr);
-            FILTER = filter;
-        };
-    }
+    // this is unsafe because in no-std environments the stderr file descriptor may be invalid
+    #[allow(unused_unsafe)]
+    let stderr = unsafe { rustix::stdio::stderr() };
+    IS_TTY.store(rustix::termios::isatty(stderr), Ordering::SeqCst);
+    FILTER.store(filter as u8, Ordering::SeqCst);
 }
 
 #[cold]
 #[inline(never)]
 pub fn log(filter: Filter, msg: core::fmt::Arguments) {
+    if (filter as u8) < FILTER.load(Ordering::Relaxed) {
+        return;
+    }
+
     #[rustfmt::skip]
-    let level = if unsafe { IS_TTY } {
+    let level = if IS_TTY.load(Ordering::Relaxed) {
         match filter {
             Filter::Fatal => "\x1b[30;47m[FATAL]\x1b[0m ",
             Filter::Error => "\x1b[31m[ERROR]\x1b[0m ",
@@ -60,6 +62,8 @@ pub fn log(filter: Filter, msg: core::fmt::Arguments) {
         None => ::alloc::borrow::Cow::Owned(msg.to_string()),
     };
 
+    // this is unsafe because in no-std environments the stderr file descriptor may be invalid
+    #[allow(unused_unsafe)]
     let stderr = unsafe { rustix::stdio::stderr() };
     let bufs = [
         rustix::io::IoSlice::new(level.as_bytes()),
