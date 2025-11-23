@@ -20,16 +20,19 @@ use super::IpcErrorKind;
 
 fn get_socket_path_or_init() -> &'static Path {
     use core::ffi::{CStr, c_char};
-    use core::ptr;
     use core::sync::atomic;
 
-    static SOCKET_PATH: atomic::AtomicPtr<c_char> = atomic::AtomicPtr::new(ptr::null_mut());
+    static INITIAL_PATH: &CStr = c"";
+    static SOCKET_PATH: atomic::AtomicPtr<c_char> =
+        atomic::AtomicPtr::new(INITIAL_PATH.as_ptr().cast_mut());
 
     if SOCKET_PATH.load(atomic::Ordering::Relaxed).is_null() {
         let path = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str());
         SOCKET_PATH.store(path.as_ptr().cast_mut(), atomic::Ordering::Relaxed);
     }
 
+    // SAFETY: even we somehow get here without initializing, the worse that can happen is we use
+    // an incorrect empty path, which cause the first syscall we use with it to fail
     Path::from_cstr(unsafe { CStr::from_ptr(SOCKET_PATH.load(atomic::Ordering::Relaxed)) })
 }
 
