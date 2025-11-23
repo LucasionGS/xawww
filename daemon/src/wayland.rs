@@ -9,7 +9,7 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
     use rustix::fd::{FromRawFd, OwnedFd};
     use rustix::net::AddressFamily;
 
-    if let Some(txt) = common::getenv(c"WAYLAND_SOCKET") {
+    if let Some(txt) = unsafe { common::getenv(c"WAYLAND_SOCKET") } {
         // We should connect to the provided WAYLAND_SOCKET
         let fd =
             parse_cstr_to_rawfd(txt).expect("file descriptor in WAYLAND_SOCKET is not a number");
@@ -25,7 +25,7 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
             );
         }
     } else {
-        let socket_name = common::getenv(c"WAYLAND_DISPLAY").unwrap_or_else(|| {
+        let socket_name = unsafe { common::getenv(c"WAYLAND_DISPLAY") }.unwrap_or_else(|| {
             log::warn!("WAYLAND_DISPLAY is not set! Defaulting to wayland-0");
             c"wayland-0"
         });
@@ -34,7 +34,7 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
             rustix::net::SocketAddrUnix::new(socket_name).unwrap()
         } else {
             let mut socket_fullpath = common::path::PathBuf::new();
-            match common::getenv(c"XDG_RUNTIME_DIR") {
+            match unsafe { common::getenv(c"XDG_RUNTIME_DIR") } {
                 Some(socket_path) => socket_fullpath.push_cstr(socket_path),
                 None => {
                     use rustix::path::DecInt;

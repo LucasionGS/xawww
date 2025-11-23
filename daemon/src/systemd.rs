@@ -19,8 +19,9 @@ pub fn notify() -> io::Result<()> {
 
 #[cold]
 fn connect_notify_socket() -> io::Result<Option<rustix::fd::OwnedFd>> {
-    let Some(socket_path) = common::getenv(c"NOTIFY_SOCKET") else {
-        return Ok(None);
+    let socket_path = match unsafe { common::getenv(c"NOTIFY_SOCKET") } {
+        Some(p) => p,
+        None => return Ok(None),
     };
 
     let socket = net::socket_with(

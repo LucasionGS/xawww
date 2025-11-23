@@ -55,7 +55,7 @@ impl IpcSocket {
     }
 
     fn socket_file() -> PathBuf {
-        let mut runtime: PathBuf = crate::getenv(c"XDG_RUNTIME_DIR").map_or_else(
+        let mut runtime: PathBuf = unsafe { crate::getenv(c"XDG_RUNTIME_DIR") }.map_or_else(
             || {
                 use rustix::path::DecInt;
                 let mut p = PathBuf::from(c"/run/user");
@@ -66,7 +66,7 @@ impl IpcSocket {
             <PathBuf as From<&core::ffi::CStr>>::from,
         );
 
-        if let Some(wayland_socket) = crate::getenv(c"WAYLAND_DISPLAY") {
+        if let Some(wayland_socket) = unsafe { crate::getenv(c"WAYLAND_DISPLAY") } {
             let mut path = Path::from_cstr(wayland_socket);
             if let Some(final_component) = path.file_name() {
                 path = Path::from_cstr(final_component);
