@@ -26,7 +26,7 @@ fn get_socket_path_or_init() -> &'static Path {
     static SOCKET_PATH: atomic::AtomicPtr<c_char> =
         atomic::AtomicPtr::new(INITIAL_PATH.as_ptr().cast_mut());
 
-    if SOCKET_PATH.load(atomic::Ordering::Relaxed).is_null() {
+    if SOCKET_PATH.load(atomic::Ordering::Relaxed) == INITIAL_PATH.as_ptr().cast_mut() {
         let path = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str());
         SOCKET_PATH.store(path.as_ptr().cast_mut(), atomic::Ordering::Relaxed);
     }
