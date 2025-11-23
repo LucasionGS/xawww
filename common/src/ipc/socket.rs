@@ -19,16 +19,18 @@ use super::IpcError;
 use super::IpcErrorKind;
 
 fn get_socket_path_or_init() -> &'static Path {
-    static mut SOCKET_PATH: &core::ffi::CStr = c"";
-    static FLAG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+    use core::ffi::{CStr, c_char};
+    use core::ptr;
+    use core::sync::atomic;
 
-    if !FLAG.swap(true, core::sync::atomic::Ordering::SeqCst) {
-        unsafe {
-            SOCKET_PATH = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str())
-        };
+    static SOCKET_PATH: atomic::AtomicPtr<c_char> = atomic::AtomicPtr::new(ptr::null_mut());
+
+    if SOCKET_PATH.load(atomic::Ordering::Relaxed).is_null() {
+        let path = Box::leak(IpcSocket::socket_file().into_c_string().into_boxed_c_str());
+        SOCKET_PATH.store(path.as_ptr().cast_mut(), atomic::Ordering::Relaxed);
     }
 
-    Path::from_cstr(unsafe { SOCKET_PATH })
+    Path::from_cstr(unsafe { CStr::from_ptr(SOCKET_PATH.load(atomic::Ordering::Relaxed)) })
 }
 
 pub struct IpcSocket {
