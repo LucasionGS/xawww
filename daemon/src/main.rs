@@ -620,10 +620,19 @@ pub extern "C" fn main(
             return -1;
         }
     };
+
+    #[cfg(not(debug_assertions))]
     common::log::init(if cli.quiet {
         Filter::Error
     } else {
         Filter::Info
+    });
+
+    #[cfg(debug_assertions)]
+    common::log::init(if cli.quiet {
+        Filter::Debug
+    } else {
+        Filter::Trace
     });
 
     // next, initialize all wayland stuff
