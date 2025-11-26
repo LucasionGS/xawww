@@ -58,7 +58,7 @@ Then in `configuration.nix`:
 
 ```nix
   environment.systemPackages = [
-    inputs.awww.packages.${pkgs.system}.awww
+    inputs.awww.packages.${pkgs.stdenv.hostPlatform.system}.awww
   ];
 ```
 
