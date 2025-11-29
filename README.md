@@ -96,11 +96,12 @@ Comparing to `oguri`, `awww` uses less cpu power to animate once it has cached
 all the frames in the animation. It should also be **significantly** more
 memory efficient.
 
-The second is that, to my knowledge, there is no wallpaper daemon for wayland
-that allows you to change the wallpaper at runtime. That is, in order to, for
-example, cycle through the images of a directory, you'd have to kill the daemon
-and restart it. Not only does it make simple shell scripts a pain to write, it
-makes switching from one image to the next to happen very abruptly.
+The second is that, when I first wrote this, I coulnd't find any wallpaper
+daemon for wayland that allowed you to change the wallpaper at runtime. That is, 
+in order to, for example, cycle through the images of a directory, you had to
+kill the daemon and restart it. However, this is no longer true, as there is
+[wpaperd](https://github.com/danyspin97/wpaperd) (and maybe wasn't
+back then either and I just didn't find it).
 
 ## Usage
 
