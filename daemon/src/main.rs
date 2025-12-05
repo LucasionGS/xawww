@@ -34,6 +34,24 @@ use common::ipc::{
 use common::mmap::MmappedStr;
 use output_info::OutputInfo;
 
+/// Custom version of waybackend's match_enum_with_interface macro that handles
+/// errors gracefully instead of panicking. This prevents crashes when the compositor
+/// advertises protocol enum values (e.g., DRM formats) that waybackend doesn't recognize.
+macro_rules! match_enum_with_interface {
+    ($handler:ident, $object:ident, $msgs:ident, $(($variant:path, $interface:ident)),*$(,)?) => {
+        match $object {
+            $(
+                $variant => {
+                    if let Err(e) = $interface::event(&mut $handler, &mut $msgs) {
+                        warn!("failed to dispatch event handler: {e}");
+                        continue;
+                    }
+                }
+            )*
+        }
+    }
+}
+
 // We need this because this might be set by signals, so we can't keep it in the daemon
 static EXIT: AtomicBool = AtomicBool::new(false);
 
@@ -730,7 +748,11 @@ pub extern "C" fn main(
                         continue;
                     }
                 };
-                waybackend::match_enum_with_interface!(
+
+                // Use our custom macro that handles errors gracefully instead of panicking.
+                // This prevents crashes when the compositor advertises protocol enum values
+                // (e.g., DRM formats) that waybackend doesn't recognize.
+                match_enum_with_interface!(
                     daemon,
                     sender,
                     msgs,
