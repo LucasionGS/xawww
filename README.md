@@ -69,6 +69,7 @@ Then in `configuration.nix`:
    * avif
    (note: must have `dav1d` dependency and compile with `--features=avif` flag)
    * jpeg
+   * jpegxl (only static jxls are supported)
    * png
    * gif
    * pnm

@@ -36,6 +36,7 @@ fast_image_resize = "5.3"
 clap = { version = "4.5", features = ["derive", "wrap_help", "env"] }
 fastrand = { version = "2.3", default-features = false, features = ["std"] }
 common = { workspace = true }
+jxl-oxide = { version = "0.12", features = ["image"] }
 
 [features]
 avif = ["image/avif-native"]
