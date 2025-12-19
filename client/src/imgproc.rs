@@ -1,6 +1,6 @@
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 use image::{
-    AnimationDecoder, DynamicImage, Frames, GenericImageView, ImageFormat,
+    AnimationDecoder, DynamicImage, Frames, GenericImageView, ImageError, ImageFormat,
     codecs::{gif::GifDecoder, png::PngDecoder, webp::WebPDecoder},
 };
 use resvg::usvg::{Options, Tree};
@@ -21,6 +21,7 @@ use super::cli;
 
 pub enum Format {
     Image(ImageFormat),
+    JpegXL,
     Svg(Box<Tree>),
 }
 
@@ -28,6 +29,7 @@ impl std::fmt::Debug for Format {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Image(arg0) => f.debug_tuple("Image").field(arg0).finish(),
+            Self::JpegXL => f.debug_tuple("JpegXL").finish(),
             Self::Svg(_) => f.debug_tuple("Svg").finish(),
         }
     }
@@ -66,19 +68,37 @@ impl ImgBuf {
                 .map_err(|e| format!("failed to decode Png Image: {e}"))?
                 .is_apng()
                 .map_err(|e| format!("failed to detect if Png is animated: {e}"))?,
-            None => match Tree::from_data(&bytes, &Options::default()) {
-                Ok(tree) => {
+            None => match reader.into_dimensions() {
+                Ok(_) => {
                     return Ok(Self {
-                        format: Format::Svg(Box::new(tree)),
+                        format: Format::JpegXL,
                         bytes: bytes.into_boxed_slice(),
                         is_animated: false,
                     });
                 }
-                Err(e) => {
-                    return Err(format!(
-                        "Unrecognized format by `image` crate. Also failed to decode as `svg`: {e}."
-                    ));
-                }
+                Err(e) => match e {
+                    ImageError::Unsupported(_) => {
+                        match Tree::from_data(&bytes, &Options::default()) {
+                            Ok(tree) => {
+                                return Ok(Self {
+                                    format: Format::Svg(Box::new(tree)),
+                                    bytes: bytes.into_boxed_slice(),
+                                    is_animated: false,
+                                });
+                            }
+                            Err(e) => {
+                                return Err(format!(
+                                    "Unrecognized format by `image` crate. Also failed to decode as `svg`: {e}."
+                                ));
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(format!(
+                            "Format recognized by `image` crate but another error occured: {e}."
+                        ));
+                    }
+                },
             },
             _ => false,
         };
@@ -97,9 +117,7 @@ impl ImgBuf {
     /// Decode the ImgBuf into an RgbImage
     pub fn decode_prepare(&'_ self) -> DecodeBuffer<'_> {
         match &self.format {
-            Format::Image(image_format) => {
-                DecodeBuffer::RasterImage(RasterImage((self, image_format)))
-            }
+            Format::Image(_) | Format::JpegXL => DecodeBuffer::RasterImage(RasterImage(self)),
             Format::Svg(tree) => DecodeBuffer::VectorImage(VectorImage(tree)),
         }
     }
@@ -126,14 +144,15 @@ impl ImgBuf {
     }
 }
 
-pub struct RasterImage<'a>((&'a ImgBuf, &'a ImageFormat));
+pub struct RasterImage<'a>(&'a ImgBuf);
 pub struct VectorImage<'a>(&'a Tree);
 
 impl RasterImage<'_> {
     pub fn decode(&self, format: PixelFormat) -> Result<Image, String> {
-        let (imgbuf, image_format) = self.0;
-        let mut reader = image::ImageReader::new(Cursor::new(&imgbuf.bytes));
-        reader.set_format(*image_format);
+        let imgbuf = self.0;
+        let reader = image::ImageReader::new(Cursor::new(&imgbuf.bytes))
+            .with_guessed_format()
+            .map_err(|e| format!("failed to read image: {e}"))?;
         let dynimage = reader
             .decode()
             .map_err(|e| format!("failed to decode image: {e}"))?;
@@ -165,11 +184,11 @@ impl RasterImage<'_> {
     }
 
     pub fn is_animated(&self) -> bool {
-        self.0.0.is_animated()
+        self.0.is_animated()
     }
 
     pub fn as_frames(&self) -> Result<Frames<'_>, String> {
-        self.0.0.as_frames()
+        self.0.as_frames()
     }
 }
 

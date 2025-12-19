@@ -222,6 +222,8 @@ fn make_img_request(
             }
         }
         CliImage::Path(img_path) => {
+            #[cfg(feature = "jxl")]
+            jxl_oxide::integration::register_image_decoding_hook();
             let imgbuf = ImgBuf::new(img_path)?;
             match imgbuf.decode_prepare() {
                 DecodeBuffer::RasterImage(imgbuf) => {
