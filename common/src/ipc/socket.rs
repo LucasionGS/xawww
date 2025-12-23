@@ -32,7 +32,7 @@ fn get_socket_path_or_init() -> &'static Path {
     }
 
     // SAFETY: even we somehow get here without initializing, the worse that can happen is we use
-    // an incorrect empty path, which cause the first syscall we use with it to fail
+    // an incorrect empty path, which will cause the first syscall we use it with to fail
     Path::from_cstr(unsafe { CStr::from_ptr(SOCKET_PATH.load(atomic::Ordering::Relaxed)) })
 }
 
