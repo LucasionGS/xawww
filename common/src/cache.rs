@@ -9,7 +9,7 @@ use ::alloc::string::String;
 use ::alloc::vec::Vec;
 
 use rustix::path::Arg;
-use rustix::{buffer, fs, io};
+use rustix::{buffer, fd, fs, io};
 
 use crate::ipc::Animation;
 use crate::ipc::PixelFormat;
@@ -157,13 +157,17 @@ pub fn load_animation_frames<P: Arg>(
     let filename = animation_filename(path, dimensions, resize, pixel_format);
     let cache_dir = cache_dir()?;
 
-    let dir = fs::Dir::new(fs::open(&cache_dir, fs::OFlags::RDONLY, fs::Mode::RUSR)?)?;
-
-    let mut filepath = cache_dir;
-    filepath.push_str(&filename);
-    for entry in dir.into_iter().flatten() {
-        if entry.file_name().to_bytes() == filename.as_bytes() {
-            let fd = fs::open(&filepath, fs::OFlags::RDONLY, fs::Mode::RUSR)?;
+    let mut dir = fs::Dir::new(fs::open(&cache_dir, fs::OFlags::RDONLY, fs::Mode::RUSR)?)?;
+    while let Some(entry) = dir.next() {
+        if let Ok(entry) = entry
+            && entry.file_name().to_bytes() == filename.as_bytes()
+        {
+            let fd = fs::openat(
+                dir.fd()?,
+                entry.file_name(),
+                fs::OFlags::RDONLY,
+                fs::Mode::RUSR,
+            )?;
             let len = rustix::fs::seek(&fd, rustix::fs::SeekFrom::End(0))?;
             let mmap = Mmap::from_fd(fd, len as usize);
 
@@ -199,8 +203,10 @@ pub fn get_previous_image_cache<'a>(
 }
 
 pub fn clean() -> io::Result<()> {
-    clean_previous_versions();
-    remove_dir_all(&cache_dir()?)
+    let path = user_cache_dir()?;
+    // SAFETY: because path is absolute, the file descriptor will be ignored, and can be whatever
+    remove_dir_all(unsafe { fd::BorrowedFd::borrow_raw(0) }, path.as_c_str())?;
+    fs::rmdir(path)
 }
 
 fn clean_previous_versions() {
@@ -224,7 +230,7 @@ fn clean_previous_versions() {
         }
     };
 
-    let dir = match fs::Dir::new(dir_fd) {
+    let mut dir = match fs::Dir::new(dir_fd) {
         Ok(dir) => dir,
         Err(e) => {
             log::warn!("failed to read cache dir at {}: {e}", user_cache.display());
@@ -232,39 +238,52 @@ fn clean_previous_versions() {
         }
     };
 
-    for entry in dir.into_iter().flatten() {
-        let name = entry.file_name();
-        const CACHE_DIRNAME_BYTES: &[u8] = CACHE_DIRNAME.as_bytes();
-        match name.to_bytes() {
-            b"." | b".." | CACHE_DIRNAME_BYTES => continue,
-            _ => {
-                let mut fullpath = user_cache.clone();
-                fullpath.push_cstr(name);
-                let stat = match fs::stat(&fullpath) {
-                    Ok(stat) => stat,
-                    Err(e) => {
-                        log::warn!("failed to stat cache entry {}: {e}", fullpath.display());
-                        continue;
+    while let Some(entry) = dir.next() {
+        if let Ok(entry) = entry {
+            let dir_fd = match dir.fd() {
+                Ok(fd) => fd,
+                Err(e) => {
+                    log::warn!(
+                        "while reading dir '{}' entries, failed to get dir_fd: {e}",
+                        user_cache.display()
+                    );
+                    return;
+                }
+            };
+            let name = entry.file_name();
+            const CACHE_DIRNAME_BYTES: &[u8] = CACHE_DIRNAME.as_bytes();
+            match name.to_bytes() {
+                b"." | b".." | CACHE_DIRNAME_BYTES => continue,
+                _ => {
+                    let stat = match fs::statat(dir_fd, name, fs::AtFlags::empty()) {
+                        Ok(stat) => stat,
+                        Err(e) => {
+                            log::warn!(
+                                "failed to stat cache entry {}: {e}",
+                                name.to_string_lossy()
+                            );
+                            continue;
+                        }
+                    };
+
+                    let mut unlink_flags = fs::AtFlags::empty();
+                    if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
+                        if let Err(e) = remove_dir_all(dir_fd, name) {
+                            log::warn!(
+                                "failed to remove cache directory {}: {e}",
+                                name.to_string_lossy()
+                            );
+                        }
+                        unlink_flags = fs::AtFlags::REMOVEDIR;
                     }
-                };
-                if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
-                    if let Err(e) = remove_dir_all(&fullpath) {
+
+                    if let Err(e) = fs::unlinkat(dir_fd, name, unlink_flags) {
                         log::warn!(
-                            "failed to remove cache directory {}: {e}",
-                            fullpath.display()
+                            "failed to remove cache entry {}: {e}",
+                            name.to_string_lossy()
                         );
                         continue;
                     }
-                    if let Err(e) = fs::rmdir(&fullpath) {
-                        log::warn!(
-                            "failed to remove cache directory {}: {e}",
-                            fullpath.display()
-                        );
-                        continue;
-                    }
-                } else if let Err(e) = fs::unlink(&fullpath) {
-                    log::warn!("failed to remove cache file {}: {e}", fullpath.display());
-                    continue;
                 }
             }
         }
@@ -337,29 +356,30 @@ fn read_all(file: &rustix::fd::OwnedFd) -> io::Result<Vec<u8>> {
     Ok(data)
 }
 
-fn remove_dir_all(dir: &Path) -> io::Result<()> {
-    let base = PathBuf::from(dir);
-
-    let dir = fs::Dir::new(fs::open(
+fn remove_dir_all(dir: fd::BorrowedFd, file: &core::ffi::CStr) -> io::Result<()> {
+    let mut dir = fs::Dir::new(fs::openat(
         dir,
+        file,
         fs::OFlags::RDONLY,
         fs::Mode::RUSR.union(fs::Mode::WUSR),
     )?)?;
 
-    for entry in dir.into_iter().flatten() {
-        let name = entry.file_name();
+    while let Some(entry) = dir.next() {
+        if let Ok(entry) = entry {
+            let dir_fd = dir.fd()?;
+            let name = entry.file_name();
 
-        match name.to_bytes() {
-            b"." | b".." => continue,
-            _ => {
-                let mut fullpath = base.clone();
-                fullpath.push_cstr(name);
-                let stat = fs::stat(&fullpath)?;
-                if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
-                    remove_dir_all(&fullpath)?;
-                    fs::rmdir(&fullpath)?;
-                } else {
-                    fs::unlink(&fullpath)?;
+            match name.to_bytes() {
+                b"." | b".." => continue,
+                _ => {
+                    let stat = fs::statat(dir_fd, name, fs::AtFlags::empty())?;
+                    let mut unlink_flags = fs::AtFlags::empty();
+                    if let fs::FileType::Directory = fs::FileType::from_raw_mode(stat.st_mode) {
+                        remove_dir_all(dir_fd, name)?;
+                        unlink_flags = fs::AtFlags::REMOVEDIR;
+                    }
+
+                    fs::unlinkat(dir_fd, name, unlink_flags)?;
                 }
             }
         }
