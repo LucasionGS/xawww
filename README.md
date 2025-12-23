@@ -120,7 +120,7 @@ awww img -o <outputs> <path/to/img>
 # Control how smoothly the transition will happen, as well as its frame rate.
 # --transition-step: smaller values = smoother. Default is 2 if --transition-type is `simple`, and 90 if it is not.
 # --transition-fps: Default = 30.
-awww img <path/to/img> --transition-step <1 to 255> --transition-fps <1 to 255>
+awww img <path/to/img> --transition-step <1 to 255> --transition-fps <1 to 65535>
 
 # There are also many different transition effects:
 awww img <path/to/img> --transition-type center
