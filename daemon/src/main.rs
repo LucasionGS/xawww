@@ -804,7 +804,7 @@ fn setup_signals() {
 
     #[cfg(not(target_os = "aix"))]
     {
-        sigaction.sa_sigaction = signal_handler as usize;
+        sigaction.sa_sigaction = signal_handler as *const () as usize;
     }
     #[cfg(target_os = "aix")]
     {
