@@ -1,5 +1,5 @@
 use ::alloc::boxed::Box;
-use ::alloc::string::{String, ToString};
+use ::alloc::string::String;
 use ::alloc::vec::Vec;
 
 use core::time::Duration;
@@ -88,8 +88,10 @@ impl IpcSocket {
     #[must_use]
     pub fn path(namespace: &str) -> PathBuf {
         let mut p = PathBuf::from(get_socket_path_or_init());
-        p.append_cstr(c".");
-        p.append_str(namespace);
+        if !namespace.is_empty() {
+            p.append_cstr(c".");
+            p.append_str(namespace);
+        }
         p.append_cstr(c".sock");
         p
     }
@@ -103,13 +105,7 @@ impl IpcSocket {
         };
 
         let filename = match p.file_name() {
-            Some(filename) => {
-                let mut path = PathBuf::from(filename);
-                // add a final '.' character, because the namespace is always preceded by a dot
-                // character
-                path.append_cstr(c".");
-                path
-            }
+            Some(filename) => filename,
             None => return Err(Errno::NOENT),
         };
 
@@ -119,15 +115,13 @@ impl IpcSocket {
             .into_iter()
             .flatten()
             .filter_map(|entry| {
-                core::str::from_utf8(
-                    entry
-                        .file_name()
-                        .to_bytes()
-                        .strip_suffix(b".sock")?
-                        .strip_prefix(filename.as_c_str().to_bytes())?,
-                )
-                .map(ToString::to_string)
-                .ok()
+                let mut namespace = entry
+                    .file_name()
+                    .to_bytes()
+                    .strip_suffix(b".sock")?
+                    .strip_prefix(filename.to_bytes())?;
+                namespace = namespace.strip_prefix(b".").unwrap_or(namespace);
+                String::from_utf8(namespace.to_vec()).ok()
             })
             .collect())
     }
