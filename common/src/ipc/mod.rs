@@ -1,6 +1,9 @@
 use ::alloc::boxed::Box;
 use ::alloc::string::String;
 
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use rustix::fs::{Mode, OFlags};
 use rustix::io;
 
 use transmit::RawMsg;
@@ -11,6 +14,7 @@ mod transmit;
 mod types;
 
 use crate::cache;
+use crate::cache::cache_dir;
 use crate::log;
 use crate::mmap::Mmap;
 pub use error::*;
@@ -99,10 +103,38 @@ impl ImageRequestBuilder {
             self.push_byte(0);
         }
 
+        // Also update outputs that are not physically connected, but have an entry in the
+        // cache.
+        // This fixes the case where a screen not connected when the wallpaper was changed
+        // would still have the old wallpaper when reconnected
+        let cached_outputs_not_in_outputs: Vec<String> = match cache_dir() {
+            Ok(cache_dir) => {
+                let mut cached_outputs = Vec::new();
+
+                if let Ok(fd) = rustix::fs::open(cache_dir, OFlags::DIRECTORY, Mode::empty())
+                    && let Ok(dir) = rustix::fs::Dir::read_from(fd)
+                {
+                    for file in dir {
+                        if let Ok(f) = file
+                            && let Ok(filename) = f.file_name().to_str()
+                            && filename != ".."
+                            && filename != "."
+                            && !outputs.contains(&filename.to_string())
+                        {
+                            cached_outputs.push(filename.to_string());
+                        }
+                    }
+                }
+
+                cached_outputs
+            }
+            Err(_) => Vec::with_capacity(0),
+        };
+
         // cache the request
-        for output in outputs {
+        for output in [outputs, cached_outputs_not_in_outputs.as_slice()].concat() {
             if let Err(e) =
-                super::cache::CacheEntry::new(namespace, resize, filter, path).store(output)
+                super::cache::CacheEntry::new(namespace, resize, filter, path).store(&output)
             {
                 log::error!("failed to store cache: {e}");
             }
