@@ -1,7 +1,77 @@
 ### Unreleased
 
+Many, many changes, including the name change from `swww` to `awww`.
 
-### 0.11.2
+We have rewritten a **lot** of stuff to make it even more memory efficient and
+performant! Check out
+[my blog](https://www.lgfae.com/posts/2025-11-21-SettingAWallpaperWithLessThan250KB.html)
+if you are interested in the details! `awww` should disappear into the
+background in terms of resource usage!
+
+#### Project renaming
+
+All references to `swww` have now been changed to `awww` (with some help from
+ExploHash). Apologies for the extra work to the package maintainers!
+
+#### BREAKING
+
+  * We've changed the place we store the cache from `$XDG_CACHE_HOME/awww` to
+    `$XDG_CACHE_HOME/awww/$PKG_VERSION`. This means the first time you use the
+    new version it won't have anything cached, and you will have to set the
+    wallpaper image again.
+
+#### Enhancements
+
+  * Added a pause feature, by MrNavaStar
+  * `awww query` now supports `json` printing!
+  * `--transition-random` now also randomizes the angles!
+  * we support `jxl` behind a feature flag (by Askedis)
+  * Improved animated images compression and decompression effiency (with
+    an avx512 decompression implementation!)
+  * Improved transition efficiency, by using a function with less branching,
+    leading to better auto-vectorization
+  * Resize method is now also stored in the cache
+  * Optimized many structs memory layouts (too many -- and too technical -- to
+    list here)
+  * The `common` crate now also uses `log` for warnings (it was doing manual
+    prints before, which looked ugly and was inconsistent)
+  * ryincler improved documentation by replacing single-ticks with bold blocks
+    and removing useless bold blocks
+  * delete all multi-threading from the `daemon`. Finally, there can be no more
+    run conditions!
+  * manual logging implementation for extra nice messages and efficiency
+  * `common` crate is now `no-std`, using only `rustix` for interacting with the
+    operating system.
+  * `daemon` crate is almost `no-std`. The only blocker is the fact that would
+    force users to have a nightly rust toolchain to build it. Making it `no-std`
+    has improved many things in terms of efficiency and memory footprint.
+
+#### Fixes
+
+  * Adjusted multi monitor example script, by Felix Baum
+  * Fixed ghosting when transition-step is too high
+  * Fixed some documentation
+  * Fixed animation frames using the wrong resize strategy
+  * `awww-daemon --help` had the wrong indentation
+  * Ryan Bruntz fixed the `awww query --all` documentation
+  * viri has helped fixing some links in the Readme
+
+#### Internal
+
+  * updated to rust edition 2024
+  * deleted compression benchmark (it was terrible, unrealiable and misleading)
+  * tried many, many times to fix the codeberg CI, and still failed T_T
+
+#### Unmentioned contributors
+
+These are people who contributed to this release even if not mentioned above,
+mostly because their stuff was either too internal to be relevant for users, or
+that it was superseeded by the large rewrite I did later. Their help is still
+very much appreciated!
+
+  * Arthur Heymans
+  * nyxmeowmeow
+  * wilhelmines
 
 ### 0.11.2
 
@@ -174,7 +244,7 @@ This is mostly just fixes and small improvements.
 #### Fixes
 
   * fixed wallpaper never setting `configured` to 'true'
-  * fixed fractional scaling rounding incorrectly 
+  * fixed fractional scaling rounding incorrectly
   * fixed scaling for vertical monitors (thanks, @AhJi26)
   * fixed the annoying black screen on login issue (finally)
 
@@ -235,7 +305,7 @@ Quick release to fix a scaling error that might affect a lot of people.
     we were transforming the images in the daemon itself)
     - simplified the daemon's transitions
     - using `bitcode` instead of `rkyv` for serialization
-    - using `rustix` instead of `nix` for unix stuff 
+    - using `rustix` instead of `nix` for unix stuff
     - The Big One: we've eliminated our dependency on `smithay-client-toolkit`,
     now make calls directly to `wayland-client`. This gives us more control over
     our code for the price of a little extra verbosity.
@@ -305,7 +375,7 @@ NOTE ALL 0.8.* VERSIONS WILL PROBABLY NO LONGER BUILD WITH NEWER RUST VERSIONS.
 This is because Rust promoted `let_underscore_lock` to a hard error, which
 wasn't the case at the time we've published these versions.
 
-#### **ATTENTION PACKAGE MAINTAINERS** 
+#### **ATTENTION PACKAGE MAINTAINERS**
 
 I've changed my username from `Horus645` to `LGFae`. This means you will have to
 update the remote url to `https://github.com/LGFae/awww`. Anyone who also has
@@ -343,7 +413,7 @@ Pretty a much a near-exclusive bug fix release:
 
   * Fixed `awww clear` causing the daemon to exit
   * The cache is once again being correctly load during `awww init`
-  * Fixed glitches happening to animated gifs (frames were being loaded in the 
+  * Fixed glitches happening to animated gifs (frames were being loaded in the
   wrong order)
   * Fixed `awww-daemon` sometimes not drawing to the whole screen (forgot to set
   the exclusive zone to -2)
@@ -490,7 +560,7 @@ Internal:
   improvements in terms of overall memory usage, among other things (#52).
 
 Improvements:
- 
+
  * separate client and daemon (see above).
  * we don't try to animate `gif` files that have only one frame
  * we can read images from stdin (not this does not work for animated gifs; we
@@ -587,7 +657,7 @@ Improvements:
 * Our custom compression is now even faster
 * I did a rewrite of the way the code that handled animations was structured.
   This made caching a LOT faster, but it incurs in more memory usage, since
-  we spawn an extra thread to make a pipeline. That said, since this also 
+  we spawn an extra thread to make a pipeline. That said, since this also
   greatly simplified the code itself, I considered it an overall positive
   change.
 * Fixed a bug where the animation wouldn't stop until it had processed all the
@@ -609,7 +679,7 @@ working. Now, however, it seems to be working properly. In hindsight, it was
 probably already working for a while, but I failed to test it properly and
 thought it was still a problem.
 
-The `awww init -i` and `awww init -c` options shall remain for now, for 
+The `awww init -i` and `awww init -c` options shall remain for now, for
 compatibility and just in case a regression happens. Once I am confident
 enough, they will be eliminated (that will let me erase around 50 lines of
 code, I think).
