@@ -174,7 +174,14 @@ fn make_request(args: &Awww, namespace: &str) -> Result<Option<RequestSend>, Str
                 get_format_dims_and_outputs(&requested_outputs, namespace)?;
             // let imgbuf = ImgBuf::new(&img.path)?;
 
-            let img_request = make_img_request(img, namespace, &dims, format, &outputs)?;
+            let img_request = make_img_request(
+                img,
+                namespace,
+                &dims,
+                format,
+                &outputs,
+                img.outputs.is_empty(),
+            )?;
 
             Ok(Some(RequestSend::Img(img_request)))
         }
@@ -190,6 +197,7 @@ fn make_img_request(
     dims: &[(u32, u32)],
     pixel_format: ipc::PixelFormat,
     outputs: &[Vec<String>],
+    update_cached_disconnected_outputs: bool,
 ) -> Result<Mmap, String> {
     let transition = make_transition(img);
     let mut img_req_builder = ipc::ImageRequestBuilder::new(transition)
@@ -198,18 +206,24 @@ fn make_img_request(
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
 
+    let cache_path;
+
     match &img.image {
         CliImage::Color(color) => {
+            let color_path = format!(
+                "0x{:02x}{:02x}{:02x}{:02x}",
+                color[0], color[1], color[2], color[3]
+            );
+
+            cache_path = color_path.clone();
+
             for (&dim, outputs) in dims.iter().zip(outputs) {
                 img_req_builder.push(
                     ipc::ImgSend {
                         img: image::RgbaImage::from_pixel(dim.0, dim.1, image::Rgba(*color))
                             .to_vec()
                             .into_boxed_slice(),
-                        path: format!(
-                            "0x{:02x}{:02x}{:02x}{:02x}",
-                            color[0], color[1], color[2], color[3]
-                        ),
+                        path: color_path.clone(),
                         dim,
                         format: pixel_format,
                     },
@@ -229,20 +243,27 @@ fn make_img_request(
                 DecodeBuffer::RasterImage(imgbuf) => {
                     let img_raw = imgbuf.decode(pixel_format)?;
 
-                    for (&dim, outputs) in dims.iter().zip(outputs) {
-                        let path = match img_path.canonicalize() {
-                            Ok(p) => p.display().to_string(),
-                            Err(e) => {
-                                if let Some("-") = img_path.to_str() {
-                                    "STDIN".to_string()
-                                } else {
-                                    return Err(format!("failed no canonicalize image path: {e}"));
-                                }
+                    let path = match img_path.canonicalize() {
+                        Ok(p) => p.display().to_string(),
+                        Err(e) => {
+                            if let Some("-") = img_path.to_str() {
+                                "STDIN".to_string()
+                            } else {
+                                return Err(format!("failed no canonicalize image path: {e}"));
                             }
-                        };
+                        }
+                    };
 
+                    cache_path = path.clone();
+
+                    for (&dim, outputs) in dims.iter().zip(outputs) {
                         let animation = if imgbuf.is_animated() {
-                            match cache::load_animation_frames(&path, dim, resize, pixel_format) {
+                            match cache::load_animation_frames(
+                                &path.clone(),
+                                dim,
+                                resize,
+                                pixel_format,
+                            ) {
                                 Ok(Some(animation)) => Some(animation),
                                 otherwise => {
                                     if let Err(e) = otherwise {
@@ -289,7 +310,7 @@ fn make_img_request(
                         img_req_builder.push(
                             ipc::ImgSend {
                                 img,
-                                path,
+                                path: path.clone(),
                                 dim,
                                 format: pixel_format,
                             },
@@ -304,17 +325,20 @@ fn make_img_request(
                 // Vector images are different because we can render them at any scale. So we
                 // always make sure to render them at the largest possible scale without distortion
                 DecodeBuffer::VectorImage(imgbuf) => {
-                    for (&dim, outputs) in dims.iter().zip(outputs) {
-                        let path = match img_path.canonicalize() {
-                            Ok(p) => p.display().to_string(),
-                            Err(e) => {
-                                if let Some("-") = img_path.to_str() {
-                                    "STDIN".to_string()
-                                } else {
-                                    return Err(format!("failed no canonicalize image path: {e}"));
-                                }
+                    let path = match img_path.canonicalize() {
+                        Ok(p) => p.display().to_string(),
+                        Err(e) => {
+                            if let Some("-") = img_path.to_str() {
+                                "STDIN".to_string()
+                            } else {
+                                return Err(format!("failed no canonicalize image path: {e}"));
                             }
-                        };
+                        }
+                    };
+
+                    cache_path = path.clone();
+
+                    for (&dim, outputs) in dims.iter().zip(outputs) {
                         let filter = img.filter.as_str();
                         let img_raw = imgbuf.decode(pixel_format, dim.0, dim.1)?;
                         let img = match img.resize {
@@ -335,7 +359,7 @@ fn make_img_request(
                         img_req_builder.push(
                             ipc::ImgSend {
                                 img,
-                                path,
+                                path: path.clone(),
                                 dim,
                                 format: pixel_format,
                             },
@@ -349,6 +373,10 @@ fn make_img_request(
                 }
             }
         }
+    }
+
+    if update_cached_disconnected_outputs {
+        img_req_builder.update_disconnected_caches(cache_path, namespace, outputs);
     }
 
     Ok(img_req_builder.build())

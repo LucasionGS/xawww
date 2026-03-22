@@ -13,8 +13,8 @@ mod socket;
 mod transmit;
 mod types;
 
-use crate::cache;
-use crate::cache::cache_dir;
+use crate::cache::{self, read_cache_file};
+use crate::cache::{cache_dir, get_previous_image_cache};
 use crate::log;
 use crate::mmap::Mmap;
 pub use error::*;
@@ -103,38 +103,10 @@ impl ImageRequestBuilder {
             self.push_byte(0);
         }
 
-        // Also update outputs that are not physically connected, but have an entry in the
-        // cache.
-        // This fixes the case where a screen not connected when the wallpaper was changed
-        // would still have the old wallpaper when reconnected
-        let cached_outputs_not_in_outputs: Vec<String> = match cache_dir() {
-            Ok(cache_dir) => {
-                let mut cached_outputs = Vec::new();
-
-                if let Ok(fd) = rustix::fs::open(cache_dir, OFlags::DIRECTORY, Mode::empty())
-                    && let Ok(dir) = rustix::fs::Dir::read_from(fd)
-                {
-                    for file in dir {
-                        if let Ok(f) = file
-                            && let Ok(filename) = f.file_name().to_str()
-                            && filename != ".."
-                            && filename != "."
-                            && !outputs.contains(&filename.to_string())
-                        {
-                            cached_outputs.push(filename.to_string());
-                        }
-                    }
-                }
-
-                cached_outputs
-            }
-            Err(_) => Vec::with_capacity(0),
-        };
-
         // cache the request
-        for output in [outputs, cached_outputs_not_in_outputs.as_slice()].concat() {
+        for output in outputs {
             if let Err(e) =
-                super::cache::CacheEntry::new(namespace, resize, filter, path).store(&output)
+                super::cache::CacheEntry::new(namespace, resize, filter, path).store(output)
             {
                 log::error!("failed to store cache: {e}");
             }
@@ -147,6 +119,58 @@ impl ImageRequestBuilder {
             let path = buf.as_path();
             if let Err(e) = cache::store_animation_frames(animation, path, *dims, resize, *format) {
                 log::error!("failed storing cache for {}: {e}", path.display());
+            }
+        }
+    }
+
+    /// This function is called only when no output is specified (using `--outputs ...`)
+    #[inline]
+    pub fn update_disconnected_caches(
+        &self,
+        img_path: String,
+        namespace: &str,
+        outputs: &[Vec<String>],
+    ) {
+        let outputs: Vec<&String> = outputs.iter().flatten().collect();
+
+        if let Ok(cache_dir) = cache_dir()
+            && let Ok(fd) = rustix::fs::open(cache_dir, OFlags::DIRECTORY, Mode::empty())
+            && let Ok(dir) = rustix::fs::Dir::read_from(fd)
+        {
+            // Update outputs that are not physically connected, but have an entry in the
+            // cache.
+            // This fixes the case where a screen not connected when the wallpaper was changed
+            // would still have the old wallpaper when reconnected
+            let cached_outputs_not_in_outputs: Vec<String> = dir
+                .filter_map(|file| {
+                    if let Ok(f) = file
+                        && let Ok(filename) = f.file_name().to_str()
+                        && filename != ".."
+                        && filename != "."
+                        && !outputs.contains(&&filename.to_string())
+                    {
+                        Some(filename.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Update the cache's img_path
+            for output in cached_outputs_not_in_outputs {
+                if let Ok(cache_data) = read_cache_file(&output)
+                    && let Ok(Some(prev_image_cache)) =
+                        get_previous_image_cache(&output, namespace, &cache_data)
+                    && let Err(e) = super::cache::CacheEntry::new(
+                        namespace,
+                        prev_image_cache.resize,
+                        prev_image_cache.filter,
+                        &img_path,
+                    )
+                    .store(&output)
+                {
+                    log::error!("failed to update cache's img_path: {e}");
+                }
             }
         }
     }
