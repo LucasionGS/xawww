@@ -30,10 +30,10 @@ image = { version = "0.25", default-features = false, features = [
   "webp",
 ] }
 jzon  = { version = "0.12", default-features = false }
-resvg = { version = "0.45" }
+resvg = { version = "0.47" }
 rustix = { version = "1.1", default-features = false, features = [ "fs", "stdio" ] }
-fast_image_resize = "5.3"
-clap = { version = "4.5", features = ["derive", "wrap_help", "env"] }
+fast_image_resize = "6.0"
+clap = { version = "4.6", features = ["derive", "wrap_help", "env"] }
 fastrand = { version = "2.3", default-features = false, features = ["std"] }
 common = { workspace = true }
 jxl-oxide = { version = "0.12", features = ["image"], optional = true }
@@ -44,5 +44,5 @@ avif = ["image/avif-native"]
 jxl = ["dep:jxl-oxide"]
 
 [build-dependencies]
-clap = { version = "4.5", features = ["derive", "env"] }
-clap_complete = "4.5"
+clap = { version = "4.6", features = ["derive", "env"] }
+clap_complete = "4.6"
