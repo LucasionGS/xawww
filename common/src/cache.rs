@@ -303,7 +303,7 @@ fn user_cache_dir() -> io::Result<PathBuf> {
     } else if let Some(path) = unsafe { crate::getenv(c"HOME") } {
         Ok(PathBuf::from_iter([path, c".cache", c"awww"]))
     } else {
-        Err(io::Errno::NODATA)
+        Err(io::Errno::NOENT)
     }
 }
 
