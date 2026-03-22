@@ -95,7 +95,7 @@ impl ImgBuf {
                     }
                     _ => {
                         return Err(format!(
-                            "Format recognized by `image` crate but another error occured: {e}."
+                            "Format recognized by `image` crate but another error occurred: {e}."
                         ));
                     }
                 },

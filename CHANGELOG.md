@@ -1,5 +1,8 @@
 ### Unreleased
 
+
+### 0.12.0
+
 Many, many changes, including the name change from `swww` to `awww`.
 
 We have rewritten a **lot** of stuff to make it even more memory efficient and
@@ -26,7 +29,7 @@ ExploHash). Apologies for the extra work to the package maintainers!
   * `awww query` now supports `json` printing!
   * `--transition-random` now also randomizes the angles!
   * we support `jxl` behind a feature flag (by Askedis)
-  * Improved animated images compression and decompression effiency (with
+  * Improved animated images compression and decompression efficiency (with
     an avx512 decompression implementation!)
   * Improved transition efficiency, by using a function with less branching,
     leading to better auto-vectorization
@@ -59,14 +62,14 @@ ExploHash). Apologies for the extra work to the package maintainers!
 #### Internal
 
   * updated to rust edition 2024
-  * deleted compression benchmark (it was terrible, unrealiable and misleading)
+  * deleted compression benchmark (it was terrible, unreliable and misleading)
   * tried many, many times to fix the codeberg CI, and still failed T_T
 
 #### Unmentioned contributors
 
 These are people who contributed to this release even if not mentioned above,
 mostly because their stuff was either too internal to be relevant for users, or
-that it was superseeded by the large rewrite I did later. Their help is still
+that it was superseded by the large rewrite I did later. Their help is still
 very much appreciated!
 
   * Arthur Heymans

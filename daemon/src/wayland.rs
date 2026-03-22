@@ -64,7 +64,7 @@ pub fn connect() -> (Waybackend, ObjectManager<WaylandObject>, Receiver) {
 /// This function is unlikely to run, as most wayland implementations use WAYLAND_DISPLAY, not
 /// WAYLAND_SOCKET
 ///
-/// We are writting our own manual implementation because Rust cannot parse a `cstr` directly.
+/// We are writing our own manual implementation because Rust cannot parse a `cstr` directly.
 /// Instead, it demands we first transform it to a str (which goes through a utf8 verification),
 /// and THEN try parsing the number, therefore generating code with 2 unwraps and panic conditions,
 /// even though 1 would suffice

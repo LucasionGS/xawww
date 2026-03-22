@@ -3,7 +3,7 @@ use super::super::Vector2;
 
 pub const SAMPLE_TABLE_SIZE: usize = 20;
 
-const NEWTON_ITERTIONS: usize = 4;
+const NEWTON_ITERATIONS: usize = 4;
 const NEWTON_MIN_SLOPE: f32 = 0.001;
 const SUBDIVISION_PRECISION: f32 = 0.0000001;
 const SUBDIVISION_MAX_ITERATIONS: usize = 10;
@@ -43,7 +43,7 @@ impl BezierCurve {
     fn newton_raphson(x: f32, guess: f32, x1: f32, x2: f32) -> f32 {
         let mut guess = guess;
 
-        for _ in 0..NEWTON_ITERTIONS {
+        for _ in 0..NEWTON_ITERATIONS {
             let current_slope = Self::slope(guess, x1, x2);
             if current_slope == 0.0 {
                 break;
@@ -98,7 +98,7 @@ impl BezierCurve {
         let guess_for_t = interval_start + dist * sample_step_size;
 
         match Self::slope(guess_for_t, self.p1.x, self.p2.x) {
-            inital_slope if inital_slope >= NEWTON_MIN_SLOPE => {
+            initial_slope if initial_slope >= NEWTON_MIN_SLOPE => {
                 Self::newton_raphson(x, guess_for_t, self.p1.x, self.p2.x)
             }
             0.0 => guess_for_t,
