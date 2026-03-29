@@ -38,6 +38,8 @@ impl From<RequestSend> for RawMsg {
             RequestSend::Clear(_) => Code::ReqClear,
             RequestSend::Img(_) => Code::ReqImg,
             RequestSend::Toggle => Code::ReqToggle,
+            RequestSend::Pause => Code::ReqPause,
+            RequestSend::Unpause => Code::ReqUnpause,
             RequestSend::Kill => Code::ReqKill,
         };
 
@@ -152,6 +154,8 @@ impl From<RawMsg> for RequestRecv {
                 })
             }
             Code::ReqToggle => Self::Toggle,
+            Code::ReqPause => Self::Pause,
+            Code::ReqUnpause => Self::Unpause,
             Code::ReqKill => Self::Kill,
             _ => Self::Kill,
         }
@@ -220,6 +224,8 @@ macro_rules! code {
                     Code::ResAwait      => f.write_str("ResAwait"),
                     Code::ResInfo       => f.write_str("ResInfo"),
                     Code::ReqToggle      => f.write_str("ReqToggle"),
+                    Code::ReqPause      => f.write_str("ReqPause"),
+                    Code::ReqUnpause      => f.write_str("ReqUnpause"),
                 }
             }
         }
@@ -240,6 +246,8 @@ code! {
     ResInfo       8,
 
     ReqToggle      9,
+    ReqPause      10,
+    ReqUnpause      11,
 }
 
 impl TryFrom<u64> for Code {

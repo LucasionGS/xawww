@@ -185,6 +185,14 @@ impl Daemon {
                 self.paused = !self.paused;
                 Answer::Ok
             }
+            RequestRecv::Pause => {
+                self.paused = true;
+                Answer::Ok
+            }
+            RequestRecv::Unpause => {
+                self.paused = false;
+                Answer::Ok
+            }
             RequestRecv::Kill => {
                 exit_daemon();
                 Answer::Ok
