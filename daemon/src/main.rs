@@ -181,7 +181,7 @@ impl Daemon {
             RequestRecv::Ping => {
                 Answer::Ping(self.wallpapers.iter().all(|w| w.borrow().configured))
             }
-            RequestRecv::Pause => {
+            RequestRecv::Toggle => {
                 self.paused = !self.paused;
                 Answer::Ok
             }

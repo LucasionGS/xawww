@@ -180,8 +180,8 @@ pub enum Awww {
     /// Use `-` to read from stdin
     Img(Img),
 
-    ///Pauses the daemon
-    Pause(Pause),
+    ///Toggles the daemon
+    Toggle(Toggle),
 
     ///Kills the daemon
     Kill(Kill),
@@ -224,8 +224,8 @@ pub struct Clear {
 }
 
 #[derive(Parser)]
-pub struct Pause {
-    /// Pause all awww-daemon instances (all namespaces)
+pub struct Toggle {
+    /// Toggle all awww-daemon instances (all namespaces)
     #[arg(short, long, default_value = "false")]
     pub all: bool,
 
