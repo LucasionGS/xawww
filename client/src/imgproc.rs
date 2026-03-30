@@ -15,7 +15,7 @@ use common::{
     ipc::{self, Coord, Nanos, PixelFormat, Position},
 };
 
-use crate::cli::ResizeStrategy;
+use crate::cli::{ResizeStrategy, CropGravity};
 
 use super::cli;
 
@@ -333,7 +333,7 @@ pub fn compress_frames(
     let first_img = Image::from_frame(first, format);
     let first_img = match resize {
         ResizeStrategy::No => img_pad(&first_img, dim, color),
-        ResizeStrategy::Crop => img_resize_crop(&first_img, dim, filter)?,
+        ResizeStrategy::Crop => img_resize_crop(&first_img, dim, filter, None)?,
         ResizeStrategy::Fit => img_resize_fit(&first_img, dim, filter, color)?,
         ResizeStrategy::Stretch => img_resize_stretch(&first_img, dim, filter)?,
     };
@@ -346,7 +346,7 @@ pub fn compress_frames(
         let img = Image::from_frame(frame, format);
         let img = match resize {
             ResizeStrategy::No => img_pad(&img, dim, color),
-            ResizeStrategy::Crop => img_resize_crop(&img, dim, filter)?,
+            ResizeStrategy::Crop => img_resize_crop(&img, dim, filter, None)?,
             ResizeStrategy::Fit => img_resize_fit(&img, dim, filter, color)?,
             ResizeStrategy::Stretch => img_resize_stretch(&img, dim, filter)?,
         };
@@ -557,6 +557,7 @@ pub fn img_resize_crop(
     img: &Image,
     dimensions: (u32, u32),
     filter: FilterType,
+    crop_gravity: Option<CropGravity>,
 ) -> Result<Box<[u8]>, String> {
     let (width, height) = dimensions;
     let resized_img = if (img.width, img.height) == (width, height) {
@@ -577,11 +578,13 @@ pub fn img_resize_crop(
             Err(e) => return Err(e.to_string()),
         };
 
+        let centering_tuple = crop_gravity.unwrap_or_default().as_centering_tuple();
+
         let mut dst = fast_image_resize::images::Image::new(width, height, pixel_type);
         let mut resizer = Resizer::new();
         let options = ResizeOptions::new()
             .resize_alg(ResizeAlg::Convolution(filter))
-            .fit_into_destination(Some((0.5, 0.5)));
+            .fit_into_destination(Some(centering_tuple));
 
         if let Err(e) = resizer.resize(&src, &mut dst, Some(&options)) {
             return Err(e.to_string());

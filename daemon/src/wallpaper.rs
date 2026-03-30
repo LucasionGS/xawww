@@ -295,16 +295,23 @@ impl Wallpaper {
                             static environ: *const *const core::ffi::c_char;
                         }
 
+                        let crop_gravity_parameters = match cache.crop_gravity {
+                            Some(v) => format!("--crop-gravity={v}"),
+                            None => "".to_string(),
+                        };
+
                         let cmd = format!(
                             "exec awww img \
                             --outputs='{output_name}' \
                             --resize={} \
+                            {crop_gravity_parameters} \
                             --filter={} \
                             --namespace='{namespace}' \
                             --transition-type=none \
                             '{}'\0",
                             cache.resize, cache.filter, cache.img_path
                         );
+                        common::log::debug!("{}", cmd);
                         match unsafe { rustix::runtime::kernel_fork() } {
                             Ok(rustix::runtime::Fork::Child(_)) => {
                                 let args: [*const u8; 4] = [

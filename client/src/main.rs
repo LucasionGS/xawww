@@ -9,7 +9,7 @@ mod imgproc;
 use imgproc::*;
 
 mod cli;
-use cli::{Awww, CliImage, Filter, ResizeStrategy};
+use cli::{Awww, CliImage, Filter, ResizeStrategy, CropGravity};
 
 fn main() -> Result<(), String> {
     common::log::init(common::log::Filter::Trace);
@@ -197,6 +197,10 @@ fn make_img_request(
 
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
+    let crop_gravity_str = match img.crop_gravity {
+        Some(v) => Some(v.as_str()),
+        None => None,
+    };
 
     match &img.image {
         CliImage::Color(color) => {
@@ -215,6 +219,7 @@ fn make_img_request(
                     },
                     namespace,
                     resize,
+                    crop_gravity_str,
                     filter,
                     outputs,
                     None,
@@ -273,7 +278,12 @@ fn make_img_request(
                         let img = match img.resize {
                             ResizeStrategy::No => img_pad(&img_raw, dim, img.fill_color),
                             ResizeStrategy::Crop => {
-                                img_resize_crop(&img_raw, dim, make_filter(img.filter))?
+                                img_resize_crop(
+                                    &img_raw,
+                                    dim,
+                                    make_filter(img.filter),
+                                    img.crop_gravity,
+                                )?
                             }
                             ResizeStrategy::Fit => img_resize_fit(
                                 &img_raw,
@@ -295,6 +305,7 @@ fn make_img_request(
                             },
                             namespace,
                             resize,
+                            crop_gravity_str,
                             filter,
                             outputs,
                             animation,
@@ -320,7 +331,12 @@ fn make_img_request(
                         let img = match img.resize {
                             ResizeStrategy::No => img_pad(&img_raw, dim, img.fill_color),
                             ResizeStrategy::Crop => {
-                                img_resize_crop(&img_raw, dim, make_filter(img.filter))?
+                                img_resize_crop(
+                                    &img_raw,
+                                    dim,
+                                    make_filter(img.filter),
+                                    img.crop_gravity,
+                                )?
                             }
                             ResizeStrategy::Fit => img_resize_fit(
                                 &img_raw,
@@ -341,6 +357,7 @@ fn make_img_request(
                             },
                             namespace,
                             resize,
+                            crop_gravity_str,
                             filter,
                             outputs,
                             None,
@@ -433,6 +450,11 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
 
+    let crop_gravity = match cache.crop_gravity {
+        Some(v) => Some(CropGravity::from_str(v).unwrap_or_default()),
+        None => None,
+    };
+
     process_awww_args(
         &Awww::Img(cli::Img {
             all: false,
@@ -442,6 +464,7 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
             #[allow(deprecated)]
             no_resize: false,
             resize: ResizeStrategy::from_str(cache.resize).unwrap_or(ResizeStrategy::Crop),
+            crop_gravity: crop_gravity,
             fill_color: [0, 0, 0, 255],
             filter: Filter::from_str(cache.filter).unwrap_or(Filter::Lanczos3),
             transition_type: cli::TransitionType::None,

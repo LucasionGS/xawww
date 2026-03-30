@@ -328,6 +328,73 @@ impl std::str::FromStr for ResizeStrategy {
     }
 }
 
+#[derive(Default, Clone, Copy, ValueEnum)]
+pub enum CropGravity {
+    Northwest,
+    North,
+    Northeast,
+    West,
+    #[default]
+    Center,
+    East,
+    Southwest,
+    South,
+    Southeast,
+}
+
+impl CropGravity {
+    pub fn as_centering_tuple(self) -> (f64, f64) {
+        match self {
+            CropGravity::Northwest => (0.0, 0.0),
+            CropGravity::North     => (0.5, 0.0),
+            CropGravity::Northeast => (1.0, 0.0),
+            CropGravity::West      => (0.0, 0.5),
+            CropGravity::Center    => (0.5, 0.5),
+            CropGravity::East      => (1.0, 0.5),
+            CropGravity::Southwest => (0.0, 1.0),
+            CropGravity::South     => (0.5, 1.0),
+            CropGravity::Southeast => (1.0, 1.0),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CropGravity::Northwest => "northwest",
+            CropGravity::North     => "north",
+            CropGravity::Northeast => "northeast",
+            CropGravity::West      => "west",
+            CropGravity::Center    => "center",
+            CropGravity::East      => "east",
+            CropGravity::Southwest => "southwest",
+            CropGravity::South     => "south",
+            CropGravity::Southeast => "southeast",
+        }
+    }
+}
+
+impl std::str::FromStr for CropGravity {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "northwest" => Ok(Self::Northwest),
+            "north"     => Ok(Self::North),
+            "northeast" => Ok(Self::Northeast),
+            "west"      => Ok(Self::West),
+            "center"    => Ok(Self::Center),
+            "east"      => Ok(Self::East),
+            "southwest" => Ok(Self::Southwest),
+            "south"     => Ok(Self::South),
+            "southeast" => Ok(Self::Southeast),
+            _ => Err(
+                format!("Unrecognized crop gravity '{}'. Valid crop gravity values are:\n\
+                     northwest | north | northeast | west | center | east | southwest | south | southeast\n\
+                     see awww img --help for more details", s),
+            ),
+        }
+    }
+}
+
 #[derive(Parser)]
 pub struct Restore {
     /// Restore all awww-daemon instances (all namespaces)
@@ -394,6 +461,15 @@ pub struct Img {
         default_value_if("no_resize", "true", "no")
     )]
     pub resize: ResizeStrategy,
+
+    /// Specify which portion of the image to anchor when cropping. Only used when `--resize crop`
+    /// is specified.
+    #[arg(
+        long,
+        requires("resize"),
+        default_value_if("resize", "crop", "center")
+    )]
+    pub crop_gravity: Option<CropGravity>,
 
     /// Which color to fill the padding with when output image does not fill screen
     #[arg(value_parser = from_hex, long, default_value = "000000ff")]
