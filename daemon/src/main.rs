@@ -249,6 +249,11 @@ impl Daemon {
             tv_sec: 0,
             tv_nsec: 1_000_000,
         };
+        // 100 FPS limit
+        const FPS_LIMIT: Timespec = Timespec {
+            tv_sec: 0,
+            tv_nsec: 10_000_000,
+        };
         self.poll_time = None;
 
         let mut i = 0;
@@ -284,7 +289,11 @@ impl Daemon {
                 }
             }
             let time = animator.time_to_draw();
-            self.set_poll_time(time);
+            if time < FPS_LIMIT {
+                self.set_poll_time(FPS_LIMIT);
+            } else {
+                self.set_poll_time(time);
+            }
             i += 1;
         }
     }
