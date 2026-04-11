@@ -372,44 +372,44 @@ impl std::str::FromStr for ResizeStrategy {
 
 #[derive(Default, Clone, Copy, ValueEnum)]
 pub enum CropGravity {
-    Northwest,
-    North,
-    Northeast,
-    West,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
     #[default]
     Center,
-    East,
-    Southwest,
-    South,
-    Southeast,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
 }
 
 impl CropGravity {
     pub fn as_centering_tuple(self) -> (f64, f64) {
         match self {
-            CropGravity::Northwest => (0.0, 0.0),
-            CropGravity::North     => (0.5, 0.0),
-            CropGravity::Northeast => (1.0, 0.0),
-            CropGravity::West      => (0.0, 0.5),
-            CropGravity::Center    => (0.5, 0.5),
-            CropGravity::East      => (1.0, 0.5),
-            CropGravity::Southwest => (0.0, 1.0),
-            CropGravity::South     => (0.5, 1.0),
-            CropGravity::Southeast => (1.0, 1.0),
+            CropGravity::TopLeft     => (0.0, 0.0),
+            CropGravity::Top         => (0.5, 0.0),
+            CropGravity::TopRight    => (1.0, 0.0),
+            CropGravity::Left        => (0.0, 0.5),
+            CropGravity::Center      => (0.5, 0.5),
+            CropGravity::Right       => (1.0, 0.5),
+            CropGravity::BottomLeft  => (0.0, 1.0),
+            CropGravity::Bottom      => (0.5, 1.0),
+            CropGravity::BottomRight => (1.0, 1.0),
         }
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
-            CropGravity::Northwest => "northwest",
-            CropGravity::North     => "north",
-            CropGravity::Northeast => "northeast",
-            CropGravity::West      => "west",
-            CropGravity::Center    => "center",
-            CropGravity::East      => "east",
-            CropGravity::Southwest => "southwest",
-            CropGravity::South     => "south",
-            CropGravity::Southeast => "southeast",
+            CropGravity::TopLeft     => "top-left",
+            CropGravity::Top         => "top",
+            CropGravity::TopRight    => "top-right",
+            CropGravity::Left        => "left",
+            CropGravity::Center      => "center",
+            CropGravity::Right       => "right",
+            CropGravity::BottomLeft  => "bottom-left",
+            CropGravity::Bottom      => "bottom",
+            CropGravity::BottomRight => "bottom-right",
         }
     }
 }
@@ -419,18 +419,18 @@ impl std::str::FromStr for CropGravity {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "northwest" => Ok(Self::Northwest),
-            "north"     => Ok(Self::North),
-            "northeast" => Ok(Self::Northeast),
-            "west"      => Ok(Self::West),
-            "center"    => Ok(Self::Center),
-            "east"      => Ok(Self::East),
-            "southwest" => Ok(Self::Southwest),
-            "south"     => Ok(Self::South),
-            "southeast" => Ok(Self::Southeast),
+            "top-left"     => Ok(Self::TopLeft),
+            "top"          => Ok(Self::Top),
+            "top-right"    => Ok(Self::TopRight),
+            "left"         => Ok(Self::Left),
+            "center"       => Ok(Self::Center),
+            "right"        => Ok(Self::Right),
+            "bottom-left"  => Ok(Self::BottomLeft),
+            "bottom"       => Ok(Self::Bottom),
+            "bottom-right" => Ok(Self::BottomRight),
             _ => Err(
                 format!("Unrecognized crop gravity '{}'. Valid crop gravity values are:\n\
-                     northwest | north | northeast | west | center | east | southwest | south | southeast\n\
+                     top-left | top | top-right | left | center | right | bottom-left | bottom | bottom-right\n\
                      see awww img --help for more details", s),
             ),
         }
