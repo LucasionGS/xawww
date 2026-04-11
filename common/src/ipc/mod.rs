@@ -136,7 +136,9 @@ pub enum RequestSend {
     Query,
     Clear(Mmap),
     Img(Mmap),
+    Toggle,
     Pause,
+    Unpause,
     Kill,
 }
 
@@ -145,7 +147,9 @@ pub enum RequestRecv {
     Query,
     Clear(ClearReq),
     Img(ImageReq),
+    Toggle,
     Pause,
+    Unpause,
     Kill,
 }
 
