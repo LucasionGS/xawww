@@ -22,7 +22,9 @@ fn main() -> Result<(), String> {
             return cache::clean().map_err(|e| format!("failed to clean the cache: {e}"));
         }
         Awww::Img(img) => img.all,
+        Awww::Toggle(toggle) => toggle.all,
         Awww::Pause(pause) => pause.all,
+        Awww::Unpause(unpause) => unpause.all,
         Awww::Kill(kill) => kill.all,
         Awww::Query(query) => query.all,
     };
@@ -37,7 +39,9 @@ fn main() -> Result<(), String> {
                 return cache::clean().map_err(|e| format!("failed to clean the cache: {e}"));
             }
             Awww::Img(img) => img.namespace.clone(),
+            Awww::Toggle(toggle) => toggle.namespace.clone(),
             Awww::Pause(pause) => pause.namespace.clone(),
+            Awww::Unpause(unpause) => unpause.namespace.clone(),
             Awww::Kill(kill) => kill.namespace.clone(),
             Awww::Query(query) => query.namespace.clone(),
         }
@@ -178,7 +182,9 @@ fn make_request(args: &Awww, namespace: &str) -> Result<Option<RequestSend>, Str
 
             Ok(Some(RequestSend::Img(img_request)))
         }
+        Awww::Toggle(_) => Ok(Some(RequestSend::Toggle)),
         Awww::Pause(_) => Ok(Some(RequestSend::Pause)),
+        Awww::Unpause(_) => Ok(Some(RequestSend::Unpause)),
         Awww::Kill(_) => Ok(Some(RequestSend::Kill)),
         Awww::Query(_) => Ok(Some(RequestSend::Query)),
     }
