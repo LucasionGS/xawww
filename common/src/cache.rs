@@ -5,7 +5,7 @@
 //!   2. the daemon spawns a client that reloads that image when an output is created
 
 use ::alloc::format;
-use ::alloc::string::String;
+use ::alloc::string::{String, ToString};
 use ::alloc::vec::Vec;
 
 use rustix::path::Arg;
@@ -28,6 +28,7 @@ pub struct CacheData(Vec<u8>);
 pub struct CacheEntry<'a> {
     pub namespace: &'a str,
     pub resize: &'a str,
+    pub crop_gravity: Option<&'a str>,
     pub filter: &'a str,
     pub img_path: &'a str,
 }
@@ -36,12 +37,14 @@ impl<'a> CacheEntry<'a> {
     pub(crate) fn new(
         namespace: &'a str,
         resize: &'a str,
+        crop_gravity: Option<&'a str>,
         filter: &'a str,
         img_path: &'a str,
     ) -> Self {
         Self {
             namespace,
             resize,
+            crop_gravity,
             filter,
             img_path,
         }
@@ -69,9 +72,15 @@ impl<'a> CacheEntry<'a> {
             let filter = str::from_utf8(filter).map_err(|_| err.clone())?;
             let img_path = str::from_utf8(img_path).map_err(|_| err)?;
 
+            let (resize, crop_gravity) = resize
+                .split_once(":")
+                .map(|(a, b)| (a, Some(b)))
+                .unwrap_or((resize, None));
+
             v.push(CacheEntry {
                 namespace,
                 resize,
+                crop_gravity,
                 filter,
                 img_path,
             });
@@ -98,6 +107,7 @@ impl<'a> CacheEntry<'a> {
             .find(|elem| elem.namespace == self.namespace)
         {
             entry.resize = self.resize;
+            entry.crop_gravity = self.crop_gravity;
             entry.filter = self.filter;
             entry.img_path = self.img_path;
         } else {
@@ -110,12 +120,17 @@ impl<'a> CacheEntry<'a> {
             let CacheEntry {
                 namespace,
                 resize,
+                crop_gravity,
                 filter,
                 img_path,
             } = entry;
+            let crop_gravity_option = match crop_gravity {
+                Some(value) => format!(":{value}"),
+                None => "".to_string(),
+            };
             len += write_all(
                 &file,
-                format!("{namespace}\0{resize}\0{filter}\0{img_path}").as_bytes(),
+                format!("{namespace}\0{resize}{crop_gravity_option}\0{filter}\0{img_path}").as_bytes(),
             )?;
         }
 

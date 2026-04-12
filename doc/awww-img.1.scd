@@ -64,6 +64,22 @@ awww-img
 
 	Default is _crop_.
 
+*--crop-gravity* <CROP_GRAVITY>
+	Specify which portion of the image to anchor when cropping. Only used when `--resize crop` is specified.
+
+	Possible values:
+		- _center_:       Crops top and bottom of image equally, and crops left and right of image equally.
+		- _top-left_:     Crops bottom and right of image.
+		- _top_:          Crops bottom of image, and crops left and right of image equally.
+		- _top-right_:    Crops bottom and left of image.
+		- _left_:         Crops right of image, and crops top and bottom of image equally.
+		- _right_:        Crops left of image, and crops top and bottom of image equally.
+		- _bottom-left_:  Crops top and right of image.
+		- _bottom_:       Crops top of image, and crops left and right of image equally.
+		- _bottom-right_: Crops top and left of image.
+
+	Default is _center_.
+
 *--fill-color* <RRGGBB>
 	Which color to fill the padding with when not resizing.
 

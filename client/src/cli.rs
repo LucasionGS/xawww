@@ -370,6 +370,73 @@ impl std::str::FromStr for ResizeStrategy {
     }
 }
 
+#[derive(Default, Clone, Copy, ValueEnum)]
+pub enum CropGravity {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    #[default]
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl CropGravity {
+    pub fn as_centering_tuple(self) -> (f64, f64) {
+        match self {
+            CropGravity::TopLeft     => (0.0, 0.0),
+            CropGravity::Top         => (0.5, 0.0),
+            CropGravity::TopRight    => (1.0, 0.0),
+            CropGravity::Left        => (0.0, 0.5),
+            CropGravity::Center      => (0.5, 0.5),
+            CropGravity::Right       => (1.0, 0.5),
+            CropGravity::BottomLeft  => (0.0, 1.0),
+            CropGravity::Bottom      => (0.5, 1.0),
+            CropGravity::BottomRight => (1.0, 1.0),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CropGravity::TopLeft     => "top-left",
+            CropGravity::Top         => "top",
+            CropGravity::TopRight    => "top-right",
+            CropGravity::Left        => "left",
+            CropGravity::Center      => "center",
+            CropGravity::Right       => "right",
+            CropGravity::BottomLeft  => "bottom-left",
+            CropGravity::Bottom      => "bottom",
+            CropGravity::BottomRight => "bottom-right",
+        }
+    }
+}
+
+impl std::str::FromStr for CropGravity {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "top-left"     => Ok(Self::TopLeft),
+            "top"          => Ok(Self::Top),
+            "top-right"    => Ok(Self::TopRight),
+            "left"         => Ok(Self::Left),
+            "center"       => Ok(Self::Center),
+            "right"        => Ok(Self::Right),
+            "bottom-left"  => Ok(Self::BottomLeft),
+            "bottom"       => Ok(Self::Bottom),
+            "bottom-right" => Ok(Self::BottomRight),
+            _ => Err(
+                format!("Unrecognized crop gravity '{}'. Valid crop gravity values are:\n\
+                     top-left | top | top-right | left | center | right | bottom-left | bottom | bottom-right\n\
+                     see awww img --help for more details", s),
+            ),
+        }
+    }
+}
+
 #[derive(Parser)]
 pub struct Restore {
     /// Restore all awww-daemon instances (all namespaces)
@@ -436,6 +503,15 @@ pub struct Img {
         default_value_if("no_resize", "true", "no")
     )]
     pub resize: ResizeStrategy,
+
+    /// Specify which portion of the image to anchor when cropping. Only used when `--resize crop`
+    /// is specified.
+    #[arg(
+        long,
+        requires("resize"),
+        default_value_if("resize", "crop", "center")
+    )]
+    pub crop_gravity: Option<CropGravity>,
 
     /// Which color to fill the padding with when output image does not fill screen
     #[arg(value_parser = from_hex, long, default_value = "000000ff")]
