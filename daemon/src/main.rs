@@ -257,7 +257,11 @@ impl Daemon {
             tv_sec: 0,
             tv_nsec: 1_000_000,
         };
-        // 100 FPS limit
+        // If the wallpaper is fully covered, we may run into a situation where the compositor never
+        // sends us the frame event, and we always end up setting the timer to 0, thus resulting in
+        // a busy-loop. This is here to ensure some throtling in that specific case. Ideally, we
+        // would like for the specific value to be either configurable or match the display's
+        // refresh rate. In practice 10ms works well enough
         const FPS_LIMIT: Timespec = Timespec {
             tv_sec: 0,
             tv_nsec: 10_000_000,
