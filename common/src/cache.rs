@@ -322,7 +322,7 @@ fn user_cache_dir() -> io::Result<PathBuf> {
     }
 }
 
-fn cache_dir() -> io::Result<PathBuf> {
+pub(crate) fn cache_dir() -> io::Result<PathBuf> {
     let mut path = user_cache_dir()?;
     create_dir(&path)?;
     path.push_str(CACHE_DIRNAME);
