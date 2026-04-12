@@ -146,6 +146,9 @@ awww kill
 For a more complete description, run `awww --help` or `awww <subcommand>
 --help`.
 
+There's also a `systemd` service file in [`contrib/systemd/`], courtesy of
+@seraphicfae.
+
 Finally, to get a feel for what you can do with some shell scripting, check out
 the [example_scripts](./example_scripts) folder. It can help you get started.
 
