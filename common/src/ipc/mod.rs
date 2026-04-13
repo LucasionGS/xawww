@@ -165,6 +165,7 @@ impl ImageRequestBuilder {
                     && let Err(e) = super::cache::CacheEntry::new(
                         namespace,
                         prev_image_cache.resize,
+                        prev_image_cache.crop_gravity,
                         prev_image_cache.filter,
                         &img_path,
                     )

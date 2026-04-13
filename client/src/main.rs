@@ -211,10 +211,7 @@ fn make_img_request(
 
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
-    let crop_gravity_str = match img.crop_gravity {
-        Some(v) => Some(v.as_str()),
-        None => None,
-    };
+    let crop_gravity_str = img.crop_gravity.map(|v| v.as_str());
 
     let cache_path;
 
@@ -484,10 +481,7 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    let crop_gravity = match cache.crop_gravity {
-        Some(v) => Some(CropGravity::from_str(v).unwrap_or_default()),
-        None => None,
-    };
+    let crop_gravity = cache.crop_gravity.map(|v| CropGravity::from_str(v).unwrap_or_default());
 
     process_awww_args(
         &Awww::Img(cli::Img {
@@ -498,7 +492,7 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
             #[allow(deprecated)]
             no_resize: false,
             resize: ResizeStrategy::from_str(cache.resize).unwrap_or(ResizeStrategy::Crop),
-            crop_gravity: crop_gravity,
+            crop_gravity,
             fill_color: [0, 0, 0, 255],
             filter: Filter::from_str(cache.filter).unwrap_or(Filter::Lanczos3),
             transition_type: cli::TransitionType::None,
