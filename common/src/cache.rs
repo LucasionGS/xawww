@@ -128,9 +128,10 @@ impl<'a> CacheEntry<'a> {
                 Some(value) => format!(":{value}"),
                 None => "".to_string(),
             };
+            let entry_delimiter = if len == 0 { "" } else { "\0" };
             len += write_all(
                 &file,
-                format!("{namespace}\0{resize}{crop_gravity_option}\0{filter}\0{img_path}").as_bytes(),
+                format!("{entry_delimiter}{namespace}\0{resize}{crop_gravity_option}\0{filter}\0{img_path}").as_bytes(),
             )?;
         }
 
