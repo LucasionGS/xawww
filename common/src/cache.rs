@@ -130,7 +130,8 @@ impl<'a> CacheEntry<'a> {
             };
             len += write_all(
                 &file,
-                format!("{namespace}\0{resize}{crop_gravity_option}\0{filter}\0{img_path}").as_bytes(),
+                format!("{namespace}\0{resize}{crop_gravity_option}\0{filter}\0{img_path}")
+                    .as_bytes(),
             )?;
         }
 
