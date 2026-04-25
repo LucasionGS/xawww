@@ -15,7 +15,7 @@ use common::{
     ipc::{self, Coord, Nanos, PixelFormat, Position},
 };
 
-use crate::cli::{ResizeStrategy, CropGravity};
+use crate::cli::{CropGravity, ResizeStrategy};
 
 use super::cli;
 

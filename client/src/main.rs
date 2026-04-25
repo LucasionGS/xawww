@@ -9,7 +9,7 @@ mod imgproc;
 use imgproc::*;
 
 mod cli;
-use cli::{Awww, CliImage, Filter, ResizeStrategy, CropGravity};
+use cli::{Awww, CliImage, CropGravity, Filter, ResizeStrategy};
 
 fn main() -> Result<(), String> {
     common::log::init(common::log::Filter::Trace);
@@ -301,14 +301,12 @@ fn make_img_request(
 
                         let img = match img.resize {
                             ResizeStrategy::No => img_pad(&img_raw, dim, img.fill_color),
-                            ResizeStrategy::Crop => {
-                                img_resize_crop(
-                                    &img_raw,
-                                    dim,
-                                    make_filter(img.filter),
-                                    img.crop_gravity,
-                                )?
-                            }
+                            ResizeStrategy::Crop => img_resize_crop(
+                                &img_raw,
+                                dim,
+                                make_filter(img.filter),
+                                img.crop_gravity,
+                            )?,
                             ResizeStrategy::Fit => img_resize_fit(
                                 &img_raw,
                                 dim,
@@ -357,14 +355,12 @@ fn make_img_request(
                         let img_raw = imgbuf.decode(pixel_format, dim.0, dim.1)?;
                         let img = match img.resize {
                             ResizeStrategy::No => img_pad(&img_raw, dim, img.fill_color),
-                            ResizeStrategy::Crop => {
-                                img_resize_crop(
-                                    &img_raw,
-                                    dim,
-                                    make_filter(img.filter),
-                                    img.crop_gravity,
-                                )?
-                            }
+                            ResizeStrategy::Crop => img_resize_crop(
+                                &img_raw,
+                                dim,
+                                make_filter(img.filter),
+                                img.crop_gravity,
+                            )?,
                             ResizeStrategy::Fit => img_resize_fit(
                                 &img_raw,
                                 dim,
@@ -481,7 +477,9 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    let crop_gravity = cache.crop_gravity.map(|v| CropGravity::from_str(v).unwrap_or_default());
+    let crop_gravity = cache
+        .crop_gravity
+        .map(|v| CropGravity::from_str(v).unwrap_or_default());
 
     process_awww_args(
         &Awww::Img(cli::Img {

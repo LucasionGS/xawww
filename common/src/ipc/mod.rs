@@ -107,7 +107,8 @@ impl ImageRequestBuilder {
         // cache the request
         for output in outputs {
             if let Err(e) =
-                super::cache::CacheEntry::new(namespace, resize, crop_gravity, filter, path).store(output)
+                super::cache::CacheEntry::new(namespace, resize, crop_gravity, filter, path)
+                    .store(output)
             {
                 log::error!("failed to store cache: {e}");
             }
