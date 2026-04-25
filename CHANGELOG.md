@@ -1,5 +1,20 @@
 ### Unreleased
 
+### 0.12.1
+
+Pretty much everything this time around was made by contributors. Thanks for
+the help, everyone!
+
+#### Fixes
+
+  * Fixed disconnected outputs cache not being updated (by @Aeldit).
+  * Fixed 100% CPU usage when animations aren't visible (by @drikanis).
+
+#### Enhancements
+  * New `--crop-gravity` option to select where to anchor the image when
+  cropping (by @hurlbutt).
+  * New `pause` and `unpause` commands (by @Equalizer5118).
+  * New systemd service file by (@seraphicfae).
 
 ### 0.12.0
 
