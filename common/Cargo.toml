@@ -23,6 +23,7 @@ rustix = { version = "1.1", default-features = false, features = [
   "thread",
   "time",
 ] }
+[target.'cfg(any(target_arch = "aarch64", target_arch = "x86_64", target_arch = "x86"))'.dependencies]
 cpufeatures = { version = "0.3" }
 
 [build-dependencies]
