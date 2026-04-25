@@ -9,6 +9,8 @@ the help, everyone!
 
   * Fixed disconnected outputs cache not being updated (by @Aeldit).
   * Fixed 100% CPU usage when animations aren't visible (by @drikanis).
+  * Fixed trying to use the `cpufeatures` crate on unsupported architecture (by @calandracas).
+  * added back missing null byte between entries in CacheEntry file (by @kurrycat).
 
 #### Enhancements
   * New `--crop-gravity` option to select where to anchor the image when
