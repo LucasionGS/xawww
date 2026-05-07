@@ -649,7 +649,7 @@ pub extern "C" fn main(
         Ok(Some(cli)) => cli,
         Ok(None) => return 0,
         Err(e) => {
-            let stderr = unsafe { rustix::stdio::stderr() };
+            let stderr = rustix::stdio::stderr();
             let msg = e.to_string();
             let bufs = [
                 rustix::io::IoSlice::new(msg.as_bytes()),
