@@ -19,9 +19,11 @@ pub mod path;
 /// Note2: we do not use `libc::getenv` because the long-term plan is not depending on `libc` in
 /// the `daemon` (currently we can only do that in Rust nightly).
 ///
+/// Note3: the `env` parameter must **NOT** end with an `=` byte (before the final null byte, of course), aa environment entries are matched by looking for 'env' followed immediately by '='.
+///
 /// # Safety
 ///
-/// The `env` parameter must **NOT** end with an `=` byte (before the final null byte, of course).
+/// `environ` must be a valid array of null-terminated strings.
 #[cold]
 #[inline(never)]
 pub unsafe fn getenv(env: &core::ffi::CStr) -> Option<&core::ffi::CStr> {
@@ -37,12 +39,11 @@ pub unsafe fn getenv(env: &core::ffi::CStr) -> Option<&core::ffi::CStr> {
         }
         // SAFETY: environ is composed of null terminated strings, so this should be safe
         let cstr = unsafe { core::ffi::CStr::from_ptr(cptr) };
-        if let Some(value) = cstr.to_bytes_with_nul().strip_prefix(env.to_bytes()) {
+        if let Some([b'=', value @ ..]) = cstr.to_bytes_with_nul().strip_prefix(env.to_bytes()) {
             // SAFETY:
-            // Because `env` does not end with a `=` byte, value[1..] will always skip the `=`
-            // byte, and the rest of the string is guaranteed to end in a null byte, since it was
+            // value is guaranteed to end in a null byte, since it was
             // created by removing the prefix of another CStr, which would also ends in a null byte
-            return Some(unsafe { core::ffi::CStr::from_bytes_with_nul_unchecked(&value[1..]) });
+            return Some(unsafe { core::ffi::CStr::from_bytes_with_nul_unchecked(value) });
         }
         ptr = unsafe { ptr.add(1) };
     }
