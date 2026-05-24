@@ -19,7 +19,8 @@ pub mod path;
 /// Note2: we do not use `libc::getenv` because the long-term plan is not depending on `libc` in
 /// the `daemon` (currently we can only do that in Rust nightly).
 ///
-/// Note3: the `env` parameter must **NOT** end with an `=` byte (before the final null byte, of course), aa environment entries are matched by looking for 'env' followed immediately by '='.
+/// Note3: the `env` parameter must **NOT** end with an `=` byte (before the final null byte,
+/// of course), as environment entries are matched by looking for `env` followed immediately by `=`.
 ///
 /// # Safety
 ///
