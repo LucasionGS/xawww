@@ -488,6 +488,10 @@ pub struct Img {
     #[arg(short, long, default_value = "")]
     pub namespace: Vec<String>,
 
+    /// Do not update the cache.
+    #[arg(long, default_value = "false")]
+    pub no_cache: bool,
+
     /// Do not resize the image. Equivalent to `--resize=no`
     ///
     /// If this is set, the image won't be resized, and will be centralized in the middle of the

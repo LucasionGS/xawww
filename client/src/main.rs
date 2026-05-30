@@ -209,6 +209,7 @@ fn make_img_request(
     let mut img_req_builder = ipc::ImageRequestBuilder::new(transition)
         .map_err(|e| format!("failed to create ImageRequestBuilder: {e}"))?;
 
+    let use_cache = !img.no_cache;
     let filter = img.filter.as_str();
     let resize = img.resize.as_str();
     let crop_gravity_str = img.crop_gravity.map(|v| v.as_str());
@@ -235,6 +236,7 @@ fn make_img_request(
                         format: pixel_format,
                     },
                     namespace,
+                    use_cache,
                     resize,
                     crop_gravity_str,
                     filter,
@@ -326,6 +328,7 @@ fn make_img_request(
                                 format: pixel_format,
                             },
                             namespace,
+                            use_cache,
                             resize,
                             crop_gravity_str,
                             filter,
@@ -379,6 +382,7 @@ fn make_img_request(
                                 format: pixel_format,
                             },
                             namespace,
+                            use_cache,
                             resize,
                             crop_gravity_str,
                             filter,
@@ -391,7 +395,7 @@ fn make_img_request(
         }
     }
 
-    if update_cached_disconnected_outputs {
+    if use_cache && update_cached_disconnected_outputs {
         img_req_builder.update_disconnected_caches(cache_path, namespace, outputs);
     }
 
@@ -487,6 +491,7 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
             image: cli::parse_image(cache.img_path)?,
             outputs: output.to_string(),
             namespace: vec![namespace.to_string()],
+            no_cache: true,
             #[allow(deprecated)]
             no_resize: false,
             resize: ResizeStrategy::from_str(cache.resize).unwrap_or(ResizeStrategy::Crop),
