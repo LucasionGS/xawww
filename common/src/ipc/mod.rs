@@ -71,6 +71,7 @@ impl ImageRequestBuilder {
         &mut self,
         img: ImgSend,
         namespace: &str,
+        use_cache: bool,
         resize: &str,
         crop_gravity: Option<&str>,
         filter: &str,
@@ -104,13 +105,15 @@ impl ImageRequestBuilder {
             self.push_byte(0);
         }
 
-        // cache the request
-        for output in outputs {
-            if let Err(e) =
-                super::cache::CacheEntry::new(namespace, resize, crop_gravity, filter, path)
-                    .store(output)
-            {
-                log::error!("failed to store cache: {e}");
+        if use_cache {
+            // cache the request
+            for output in outputs {
+                if let Err(e) =
+                    super::cache::CacheEntry::new(namespace, resize, crop_gravity, filter, path)
+                        .store(output)
+                {
+                    log::error!("failed to store cache: {e}");
+                }
             }
         }
 
