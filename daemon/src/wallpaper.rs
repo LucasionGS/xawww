@@ -274,7 +274,7 @@ impl Wallpaper {
         }
         self.dirty = false;
 
-        if (!self.configured && use_cache) || self.img.is_set() {
+        if (!self.configured && use_cache) || !self.img.is_set() {
             'brk: {
                 let output_name = self.name.as_deref().unwrap_or("?");
                 let cache_data = match read_cache_file(output_name) {
