@@ -312,25 +312,28 @@ impl Wallpaper {
                             cache.resize, cache.filter, cache.img_path
                         );
                         common::log::debug!("{}", cmd);
-                        match unsafe { rustix::runtime::kernel_fork() } {
-                            Ok(rustix::runtime::Fork::Child(_)) => {
-                                let args: [*const u8; 4] = [
+                        match unsafe { libc::fork() } {
+                            -1 => {
+                                let e = std::io::Error::last_os_error();
+                                error!("fork failed: {}", e);
+                            }
+                            0 => {
+                                let args: [*const libc::c_char; 4] = [
                                     c"sh".as_ptr().cast(),
                                     c"-c".as_ptr().cast(),
-                                    cmd.as_ptr(),
+                                    cmd.as_ptr().cast(),
                                     core::ptr::null(),
                                 ];
-                                let err = unsafe {
-                                    rustix::runtime::execve(
-                                        c"/bin/sh",
-                                        args.as_ptr(),
-                                        environ as *const _,
+                                let ret = unsafe {
+                                    libc::execve(
+                                        c"/bin/sh".as_ptr().cast(),
+                                        args.as_ptr() as *const *const libc::c_char,
+                                        environ as *const _ as *const *const libc::c_char,
                                     )
                                 };
-                                panic!("execve failed: {err}");
+                                panic!("execve failed: {}", ret);
                             }
-                            Ok(rustix::runtime::Fork::ParentOf(_)) => (),
-                            Err(e) => error!("fork failed: {e}"),
+                            _pid => (),
                         }
                     }
                     Ok(None) => break 'brk,
