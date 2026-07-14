@@ -102,7 +102,10 @@ impl Drop for WallpaperCell {
         if clones > 0 {
             unsafe { clones_ptr.write(clones - 1) };
         } else {
-            unsafe { std::alloc::dealloc(self.0.cast(), Self::LAYOUT) };
+            unsafe { 
+                std::ptr::drop_in_place(self.0);
+                std::alloc::dealloc(self.0.cast(), Self::LAYOUT);
+            };
         }
     }
 }
