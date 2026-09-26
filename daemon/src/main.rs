@@ -74,6 +74,7 @@ struct Daemon {
     compositor: ObjectId,
     shm: ObjectId,
     viewporter: ObjectId,
+    subcompositor: Option<ObjectId>,
     layer_shell: ObjectId,
     layer: Layer,
     pixel_format: PixelFormat,
@@ -110,6 +111,7 @@ impl Daemon {
         let layer_shell = objman.get_first(WaylandObject::LayerShell).unwrap();
         let viewporter = objman.get_first(WaylandObject::Viewporter).unwrap();
         let fractional_scale_manager = objman.get_first(WaylandObject::FractionalScaler);
+        let subcompositor = objman.get_first(WaylandObject::Subcompositor);
 
         pending_outputs.shrink_to_fit();
 
@@ -120,6 +122,7 @@ impl Daemon {
             compositor,
             shm,
             viewporter,
+            subcompositor,
             layer_shell,
             layer: args.layer,
             pixel_format: args.format.unwrap_or(PixelFormat::Argb),
@@ -131,6 +134,15 @@ impl Daemon {
             fractional_scale_manager,
             pending_outputs,
             poll_time: None,
+        }
+    }
+
+    fn effect_globals(&self) -> wallpaper::Globals {
+        wallpaper::Globals {
+            compositor: self.compositor,
+            subcompositor: self.subcompositor,
+            shm: self.shm,
+            viewporter: self.viewporter,
         }
     }
 
@@ -160,10 +172,16 @@ impl Daemon {
             RequestRecv::Clear(clear) => {
                 let wallpapers = self.find_wallpapers_by_names(&clear.outputs);
                 self.stop_animations(&wallpapers);
+                let globals = self.effect_globals();
                 for wallpaper in &wallpapers {
                     let mut wallpaper = wallpaper.borrow_mut();
                     wallpaper.set_img_info(common::ipc::BgImg::Color(clear.color));
-                    wallpaper.set_pan_zoom(None);
+                    wallpaper.set_effects(
+                        &mut self.backend,
+                        &mut self.objman,
+                        &globals,
+                        Default::default(),
+                    );
                     let dim = wallpaper.get_dimensions();
                     wallpaper.ensure_canvas_dimensions(
                         &mut self.backend,
@@ -209,7 +227,7 @@ impl Daemon {
             RequestRecv::Query => Answer::Info(self.wallpapers_info()),
             RequestRecv::Img(ImageReq {
                 transition,
-                pan_zoom,
+                effects,
                 mut imgs,
                 mut outputs,
                 mut animations,
@@ -224,15 +242,17 @@ impl Daemon {
                     };
                     let wallpapers = self.find_wallpapers_by_names(&names);
                     self.stop_animations(&wallpapers);
+                    let globals = self.effect_globals();
                     if let Some(mut animator) = Animator::new(
                         &mut self.backend,
                         &mut self.objman,
+                        &globals,
                         self.pixel_format,
                         wallpapers,
                         &transition,
                         img,
                         animation,
-                        pan_zoom,
+                        effects,
                     ) {
                         animator.frame(&mut self.backend, &mut self.objman, self.pixel_format);
                         self.animators.push(animator);
@@ -646,6 +666,8 @@ impl wayland::wp_fractional_scale_v1::EvHandler for Daemon {
 }
 
 impl wayland::wp_viewporter::EvHandler for Daemon {}
+impl wayland::wl_subcompositor::EvHandler for Daemon {}
+impl wayland::wl_subsurface::EvHandler for Daemon {}
 impl wayland::wp_viewport::EvHandler for Daemon {}
 impl wayland::wp_fractional_scale_manager_v1::EvHandler for Daemon {}
 
@@ -662,6 +684,8 @@ enum WaylandObject {
     Surface,
     Region,
     Output,
+    Subcompositor,
+    Subsurface,
 
     // layer shell
     LayerShell,
@@ -739,6 +763,7 @@ pub extern "C" fn main(
                     pending_outputs.push(OutputInfo::new(backend, objman, registry, global.name()));
                 },
                 (wl_compositor, Compositor),
+                (wl_subcompositor, Subcompositor),
                 (wl_shm, Shm),
                 (zwlr_layer_shell_v1, LayerShell),
                 (wp_viewporter, Viewporter),
@@ -827,6 +852,8 @@ pub extern "C" fn main(
                     (Surface, wl_surface),
                     (Region, wl_region),
                     (Output, wl_output),
+                    (Subcompositor, wl_subcompositor),
+                    (Subsurface, wl_subsurface),
                     (LayerShell, zwlr_layer_shell_v1),
                     (LayerSurface, zwlr_layer_surface_v1),
                     (Viewporter, wp_viewporter),

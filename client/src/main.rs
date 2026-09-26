@@ -216,16 +216,16 @@ fn make_img_request(
         CliImage::Color(_) => None,
     };
 
-    let pan_zoom = make_pan_zoom(img, imgbuf.as_ref());
-    let pan_zoom_cache = pan_zoom.as_ref().map(ipc::PanZoom::to_cache_string);
-    let pan_zoom_cache = pan_zoom_cache.as_deref();
+    let effects = make_effects(img, imgbuf.as_ref());
+    let effects_cache = effects.to_cache_string();
+    let effects_cache = effects_cache.as_deref();
     // with pan-zoom, the image is rendered larger than the output
-    let canvas_dim = |dim: (u32, u32)| match &pan_zoom {
+    let canvas_dim = |dim: (u32, u32)| match &effects.pan_zoom {
         Some(pan_zoom) => pan_zoom.canvas_dim(dim),
         None => dim,
     };
 
-    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition, pan_zoom.as_ref())
+    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition, &effects)
         .map_err(|e| format!("failed to create ImageRequestBuilder: {e}"))?;
 
     let use_cache = !img.no_cache;
@@ -259,7 +259,7 @@ fn make_img_request(
                     resize,
                     crop_gravity_str,
                     filter,
-                    None,
+                    effects_cache,
                     outputs,
                     None,
                 );
@@ -352,7 +352,7 @@ fn make_img_request(
                             resize,
                             crop_gravity_str,
                             filter,
-                            pan_zoom_cache,
+                            effects_cache,
                             outputs,
                             animation,
                         );
@@ -408,7 +408,7 @@ fn make_img_request(
                             resize,
                             crop_gravity_str,
                             filter,
-                            pan_zoom_cache,
+                            effects_cache,
                             outputs,
                             None,
                         );
@@ -425,23 +425,27 @@ fn make_img_request(
     Ok(img_req_builder.build())
 }
 
-fn make_pan_zoom(img: &cli::Img, imgbuf: Option<&ImgBuf>) -> Option<ipc::PanZoom> {
-    if !img.pan_zoom {
-        return None;
+fn make_effects(img: &cli::Img, imgbuf: Option<&ImgBuf>) -> ipc::Effects {
+    let is_animated = imgbuf.is_some_and(ImgBuf::is_animated);
+    if is_animated && (img.pan_zoom || img.rain) {
+        eprintln!("WARNING: effects are not supported for animated images. Ignoring them.");
+        return ipc::Effects::default();
     }
-    match imgbuf {
-        None => return None,
-        Some(imgbuf) if imgbuf.is_animated() => {
-            eprintln!("WARNING: pan-zoom is not supported for animated images. Ignoring it.");
-            return None;
-        }
-        Some(_) => (),
+    ipc::Effects {
+        // there is nothing to pan over in a solid color
+        pan_zoom: (img.pan_zoom && imgbuf.is_some()).then_some(ipc::PanZoom {
+            zoom: img.pan_zoom_scale,
+            duration: img.pan_zoom_duration,
+            fps: img.pan_zoom_fps,
+        }),
+        rain: img.rain.then_some(ipc::Rain {
+            intensity: img.rain_intensity,
+            speed: img.rain_speed,
+            angle: img.rain_angle,
+            dim: img.rain_dim,
+            fps: img.rain_fps,
+        }),
     }
-    Some(ipc::PanZoom {
-        zoom: img.pan_zoom_scale,
-        duration: img.pan_zoom_duration,
-        fps: img.pan_zoom_fps,
-    })
 }
 
 #[allow(clippy::type_complexity)]
@@ -526,7 +530,11 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
     let crop_gravity = cache
         .crop_gravity
         .map(|v| CropGravity::from_str(v).unwrap_or_default());
-    let pan_zoom = cache.pan_zoom.and_then(ipc::PanZoom::from_cache_str);
+    let effects = cache
+        .effects
+        .map(ipc::Effects::from_cache_str)
+        .unwrap_or_default();
+    let (pan_zoom, rain) = (effects.pan_zoom, effects.rain);
 
     process_awww_args(
         &Awww::Img(cli::Img {
@@ -557,6 +565,12 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
             pan_zoom_scale: pan_zoom.map_or(1.2, |p| p.zoom),
             pan_zoom_duration: pan_zoom.map_or(60.0, |p| p.duration),
             pan_zoom_fps: pan_zoom.map_or(30, |p| p.fps),
+            rain: rain.is_some(),
+            rain_intensity: rain.map_or(1.0, |r| r.intensity),
+            rain_speed: rain.map_or(1.0, |r| r.speed),
+            rain_angle: rain.map_or(8.0, |r| r.angle),
+            rain_dim: rain.map_or(0.2, |r| r.dim),
+            rain_fps: rain.map_or(30, |r| r.fps),
         }),
         namespace,
     )?;

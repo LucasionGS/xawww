@@ -276,6 +276,56 @@ awww-img
 
 	Default is 30
 
+*--rain*
+	\[Environment Variable: AWWW_RAIN]
+
+	Rain falling over the wallpaper.
+
+	A few layers of rain are rendered once, and from then on the compositor
+	just moves them around on the GPU, so this costs next to no CPU. Near
+	layers fall faster than far ones, which gives the rain depth. It pauses by
+	itself while the wallpaper is covered.
+
+	Can be combined with *--pan-zoom*. Ignored for animated images.
+
+*--rain-intensity* <0.05-4>
+	\[Environment Variable: AWWW_RAIN_INTENSITY]
+
+	How much rain, as a multiplier. 0.5 is a drizzle, 2 is a downpour.
+
+	Default is 1
+
+*--rain-speed* <0.25-4>
+	\[Environment Variable: AWWW_RAIN_SPEED]
+
+	How fast the rain falls, as a multiplier.
+
+	Default is 1
+
+*--rain-angle* <-45-45>
+	\[Environment Variable: AWWW_RAIN_ANGLE]
+
+	Wind, as the angle of the rain in degrees from vertical. Positive values
+	make the rain fall to the right, negative to the left.
+
+	Default is 8
+
+*--rain-dim* <0-1>
+	\[Environment Variable: AWWW_RAIN_DIM]
+
+	How much to darken the wallpaper beneath the rain. A little darkening makes
+	the rain stand out, and gives it an overcast look. Use 0 to disable it.
+
+	Default is 0.2
+
+*--rain-fps* <frames per second>
+	\[Environment Variable: AWWW_RAIN_FPS]
+
+	Frame rate of the rain. Higher values look smoother, but make the
+	compositor redraw the screen more often.
+
+	Default is 30
+
 *-h*, *--help*
 	Print help (see a summary with '-h')
 

@@ -23,8 +23,8 @@ pub use types::*;
 
 /// length of the serialized [Transition]
 const TRANSITION_LEN: usize = 51;
-/// transition + pan zoom + image count
-const IMG_REQUEST_HEADER_LEN: usize = TRANSITION_LEN + PanZoom::SERIALIZED_SIZE + 1;
+/// transition + effects + image count
+const IMG_REQUEST_HEADER_LEN: usize = TRANSITION_LEN + Effects::SERIALIZED_SIZE + 1;
 
 pub struct ImageRequestBuilder {
     memory: Mmap,
@@ -35,7 +35,7 @@ pub struct ImageRequestBuilder {
 
 impl ImageRequestBuilder {
     #[inline]
-    pub fn new(transition: Transition, pan_zoom: Option<&PanZoom>) -> io::Result<Self> {
+    pub fn new(transition: Transition, effects: &Effects) -> io::Result<Self> {
         let memory = Mmap::create(1 << (20 + 3))?; // start with 8 MB
         let len = 0;
         let mut builder = Self {
@@ -45,7 +45,7 @@ impl ImageRequestBuilder {
             img_count_index: 0,
         };
         transition.serialize(&mut builder);
-        PanZoom::serialize(pan_zoom, &mut builder);
+        effects.serialize(&mut builder);
         builder.img_count_index = builder.len;
         builder.len += 1;
         assert_eq!(builder.len, IMG_REQUEST_HEADER_LEN);
@@ -82,7 +82,7 @@ impl ImageRequestBuilder {
         resize: &str,
         crop_gravity: Option<&str>,
         filter: &str,
-        pan_zoom: Option<&str>,
+        effects: Option<&str>,
         outputs: &[String],
         animation: Option<Animation>,
     ) {
@@ -121,7 +121,7 @@ impl ImageRequestBuilder {
                     resize,
                     crop_gravity,
                     filter,
-                    pan_zoom,
+                    effects,
                     path,
                 )
                 .store(output)
@@ -185,7 +185,7 @@ impl ImageRequestBuilder {
                         prev_image_cache.resize,
                         prev_image_cache.crop_gravity,
                         prev_image_cache.filter,
-                        prev_image_cache.pan_zoom,
+                        prev_image_cache.effects,
                         &img_path,
                     )
                     .store(&output)

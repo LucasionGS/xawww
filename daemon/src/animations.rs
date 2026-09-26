@@ -6,7 +6,7 @@ use rustix::time::Timespec;
 
 use common::{
     compression::Decompressor,
-    ipc::{self, BgImg, ImgReq, Nanos, PanZoom, PixelFormat},
+    ipc::{self, BgImg, Effects, ImgReq, Nanos, PixelFormat},
     mmap::MmappedBytes,
 };
 
@@ -25,8 +25,8 @@ pub struct Animator {
 enum AnimatorKind {
     Transition(Transition),
     Animation(Animation),
-    /// Only moves the viewport. Never touches the buffers.
-    PanZoom(Nanos),
+    /// Only moves the viewport and the rain. Never touches the buffers.
+    Effects(Nanos),
 }
 
 impl Animator {
@@ -34,22 +34,27 @@ impl Animator {
     pub fn new(
         backend: &mut Waybackend,
         objman: &mut ObjectManager<WaylandObject>,
+        globals: &crate::wallpaper::Globals,
         pixel_format: PixelFormat,
         mut wallpapers: SmallVec<[WallpaperCell; 2]>,
         transition: &ipc::Transition,
         img_req: ImgReq,
         animation: Option<ipc::Animation>,
-        pan_zoom: Option<PanZoom>,
+        effects: Effects,
     ) -> Option<Self> {
         let ImgReq { img, path, dim, .. } = img_req;
         if wallpapers.is_empty() {
             return None;
         }
-        // we cannot move the viewport over an image whose contents keep changing
-        let pan_zoom = pan_zoom.filter(|_| animation.is_none());
+        // animated images drive their own frames, so we don't combine them with effects
+        let effects = if animation.is_none() {
+            effects
+        } else {
+            Effects::default()
+        };
 
         let real_dim = wallpapers[0].borrow().get_dimensions();
-        let expect = match &pan_zoom {
+        let expect = match &effects.pan_zoom {
             Some(pan_zoom) => pan_zoom.canvas_dim(real_dim),
             None => real_dim,
         };
@@ -65,7 +70,7 @@ impl Animator {
             let mut w = w.borrow_mut();
             w.set_img_info(BgImg::Img(path.str().into()));
             w.ensure_canvas_dimensions(backend, objman, pixel_format, dim, true);
-            w.set_pan_zoom(pan_zoom);
+            w.set_effects(backend, objman, globals, effects);
         }
 
         let effect = Some(Box::new(Effect::new(transition, dim)));
@@ -77,7 +82,7 @@ impl Animator {
                 fps_nanos: Nanos::from_nanos(1_000_000_000 / transition.fps.max(1) as u64),
                 img,
                 animation,
-                pan_zoom,
+                effects,
             }),
         })
     }
@@ -86,7 +91,7 @@ impl Animator {
         match &self.animator {
             AnimatorKind::Transition(transition) => transition.time_to_draw(&self.now),
             AnimatorKind::Animation(animation) => animation.time_to_draw(&self.now),
-            AnimatorKind::PanZoom(fps_nanos) => {
+            AnimatorKind::Effects(fps_nanos) => {
                 let elapsed = crate::clock::get() - self.now;
                 timespec_saturating_sub(fps_nanos.into_timespec(), elapsed)
             }
@@ -95,7 +100,7 @@ impl Animator {
 
     /// Whether this animator only moves the viewport, never drawing new buffers
     pub fn is_viewport_only(&self) -> bool {
-        matches!(self.animator, AnimatorKind::PanZoom(_))
+        matches!(self.animator, AnimatorKind::Effects(_))
     }
 
     pub fn updt_time(&mut self) {
@@ -130,9 +135,9 @@ impl Animator {
                     });
                     return false;
                 }
-                if let Some(pan_zoom) = transition.pan_zoom {
-                    *animator = AnimatorKind::PanZoom(Nanos::from_nanos(
-                        1_000_000_000 / pan_zoom.fps.max(1) as u64,
+                if !transition.effects.is_empty() {
+                    *animator = AnimatorKind::Effects(Nanos::from_nanos(
+                        1_000_000_000 / transition.effects.fps() as u64,
                     ));
                     return false;
                 }
@@ -142,7 +147,7 @@ impl Animator {
                 animation.frame(backend, objman, wallpapers, pixel_format);
                 false
             }
-            AnimatorKind::PanZoom(_) => false,
+            AnimatorKind::Effects(_) => false,
         }
     }
 }
@@ -152,7 +157,7 @@ struct Transition {
     effect: Option<Box<Effect>>,
     img: MmappedBytes,
     animation: Option<ipc::Animation>,
-    pan_zoom: Option<PanZoom>,
+    effects: Effects,
 }
 
 impl Transition {

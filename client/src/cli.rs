@@ -681,6 +681,91 @@ pub struct Img {
     /// redraw the screen more often.
     #[arg(long, env = "AWWW_PAN_ZOOM_FPS", default_value = "30", value_parser = clap::value_parser!(u16).range(1..))]
     pub pan_zoom_fps: u16,
+
+    /// Rain falling over the wallpaper.
+    ///
+    /// A few layers of rain are rendered once, and from then on the compositor just moves them
+    /// around on the GPU, so this costs next to no CPU. Near layers fall faster than far ones,
+    /// which gives the rain depth. It pauses by itself while the wallpaper is covered.
+    ///
+    /// Can be combined with --pan-zoom. Ignored for animated images.
+    #[arg(long, env = "AWWW_RAIN", default_value = "false")]
+    pub rain: bool,
+
+    /// How much rain, as a multiplier. 0.5 is a drizzle, 2 is a downpour.
+    #[arg(
+        long,
+        env = "AWWW_RAIN_INTENSITY",
+        default_value = "1",
+        value_parser = parse_rain_intensity
+    )]
+    pub rain_intensity: f32,
+
+    /// How fast the rain falls, as a multiplier.
+    #[arg(
+        long,
+        env = "AWWW_RAIN_SPEED",
+        default_value = "1",
+        value_parser = parse_rain_speed
+    )]
+    pub rain_speed: f32,
+
+    /// Wind, as the angle of the rain in degrees from vertical, between -45 and 45.
+    ///
+    /// Positive values make the rain fall to the right, negative to the left.
+    #[arg(
+        long,
+        env = "AWWW_RAIN_ANGLE",
+        default_value = "8",
+        allow_negative_numbers = true,
+        value_parser = parse_rain_angle
+    )]
+    pub rain_angle: f32,
+
+    /// How much to darken the wallpaper beneath the rain, between 0 and 1.
+    ///
+    /// A little darkening makes the rain stand out, and gives it an overcast look. Use 0 to
+    /// disable it.
+    #[arg(
+        long,
+        env = "AWWW_RAIN_DIM",
+        default_value = "0.2",
+        value_parser = parse_unit
+    )]
+    pub rain_dim: f32,
+
+    /// Frame rate of the rain.
+    ///
+    /// Higher values look smoother, but make the compositor redraw the screen more often.
+    #[arg(long, env = "AWWW_RAIN_FPS", default_value = "30", value_parser = clap::value_parser!(u16).range(1..))]
+    pub rain_fps: u16,
+}
+
+fn parse_bounded(raw: &str, min: f32, max: f32) -> Result<f32, String> {
+    let value = raw.parse::<f32>().map_err(|e| e.to_string())?;
+    if (min..=max).contains(&value) {
+        Ok(value)
+    } else {
+        Err(format!(
+            "value must be between {min} and {max}, found {value}"
+        ))
+    }
+}
+
+fn parse_rain_intensity(raw: &str) -> Result<f32, String> {
+    parse_bounded(raw, 0.05, 4.0)
+}
+
+fn parse_rain_speed(raw: &str) -> Result<f32, String> {
+    parse_bounded(raw, 0.25, 4.0)
+}
+
+fn parse_rain_angle(raw: &str) -> Result<f32, String> {
+    parse_bounded(raw, -45.0, 45.0)
+}
+
+fn parse_unit(raw: &str) -> Result<f32, String> {
+    parse_bounded(raw, 0.0, 1.0)
 }
 
 fn parse_pan_zoom_scale(raw: &str) -> Result<f32, String> {

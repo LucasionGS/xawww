@@ -534,25 +534,6 @@ impl PanZoom {
         )
     }
 
-    /// Format understood by [PanZoom::from_cache_str]
-    #[must_use]
-    pub fn to_cache_string(&self) -> String {
-        alloc::format!("{},{},{}", self.zoom, self.duration, self.fps)
-    }
-
-    #[must_use]
-    pub fn from_cache_str(s: &str) -> Option<Self> {
-        let mut iter = s.split(',');
-        let zoom = iter.next()?.parse().ok()?;
-        let duration = iter.next()?.parse().ok()?;
-        let fps = iter.next()?.parse().ok()?;
-        Some(Self {
-            zoom,
-            duration,
-            fps,
-        })
-    }
-
     pub(super) fn serialize(pan_zoom: Option<&Self>, buf: &mut ImageRequestBuilder) {
         match pan_zoom {
             Some(Self {
@@ -578,6 +559,163 @@ impl PanZoom {
             duration: f32::from_ne_bytes(bytes[5..9].try_into().unwrap()),
             fps: u16::from_ne_bytes(bytes[9..11].try_into().unwrap()),
         })
+    }
+}
+
+/// Rain falling over the wallpaper.
+///
+/// The daemon renders a few seamlessly repeating layers of rain streaks once, puts each one on
+/// its own subsurface above the wallpaper, and then only moves those subsurfaces around. The
+/// compositor does all the blending, so after setup no pixels are uploaded again.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rain {
+    /// multiplier for the amount of drops
+    pub intensity: f32,
+    /// multiplier for how fast the drops fall
+    pub speed: f32,
+    /// wind, in degrees from vertical. Positive values make the rain fall to the right
+    pub angle: f32,
+    /// how much to darken the wallpaper beneath the rain, from 0 to 1
+    pub dim: f32,
+    pub fps: u16,
+}
+
+impl Rain {
+    pub(super) const SERIALIZED_SIZE: usize = 19;
+
+    pub(super) fn serialize(rain: Option<&Self>, buf: &mut ImageRequestBuilder) {
+        match rain {
+            Some(Self {
+                intensity,
+                speed,
+                angle,
+                dim,
+                fps,
+            }) => {
+                buf.push_byte(1);
+                buf.extend(&intensity.to_ne_bytes());
+                buf.extend(&speed.to_ne_bytes());
+                buf.extend(&angle.to_ne_bytes());
+                buf.extend(&dim.to_ne_bytes());
+                buf.extend(&fps.to_ne_bytes());
+            }
+            None => buf.extend(&[0; Self::SERIALIZED_SIZE]),
+        }
+    }
+
+    pub(super) fn deserialize(bytes: &[u8]) -> Option<Self> {
+        if bytes[0] == 0 {
+            return None;
+        }
+        let f = |i: usize| f32::from_ne_bytes(bytes[i..i + 4].try_into().unwrap());
+        Some(Self {
+            intensity: f(1),
+            speed: f(5),
+            angle: f(9),
+            dim: f(13),
+            fps: u16::from_ne_bytes(bytes[17..19].try_into().unwrap()),
+        })
+    }
+}
+
+/// Effects that keep running over a static image
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Effects {
+    pub pan_zoom: Option<PanZoom>,
+    pub rain: Option<Rain>,
+}
+
+impl Effects {
+    pub(super) const SERIALIZED_SIZE: usize = PanZoom::SERIALIZED_SIZE + Rain::SERIALIZED_SIZE;
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.pan_zoom.is_none() && self.rain.is_none()
+    }
+
+    /// Frame rate needed to animate all active effects
+    #[must_use]
+    pub fn fps(&self) -> u16 {
+        let pan_zoom = self.pan_zoom.map_or(0, |p| p.fps);
+        let rain = self.rain.map_or(0, |r| r.fps);
+        pan_zoom.max(rain).max(1)
+    }
+
+    pub(super) fn serialize(&self, buf: &mut ImageRequestBuilder) {
+        PanZoom::serialize(self.pan_zoom.as_ref(), buf);
+        Rain::serialize(self.rain.as_ref(), buf);
+    }
+
+    pub(super) fn deserialize(bytes: &[u8]) -> Self {
+        Self {
+            pan_zoom: PanZoom::deserialize(bytes),
+            rain: Rain::deserialize(&bytes[PanZoom::SERIALIZED_SIZE..]),
+        }
+    }
+
+    /// Compact representation stored in the cache. Understood by [Effects::from_cache_str]
+    #[must_use]
+    pub fn to_cache_string(&self) -> Option<String> {
+        let mut items = Vec::new();
+        if let Some(PanZoom {
+            zoom,
+            duration,
+            fps,
+        }) = self.pan_zoom
+        {
+            items.push(alloc::format!("pz={zoom},{duration},{fps}"));
+        }
+        if let Some(Rain {
+            intensity,
+            speed,
+            angle,
+            dim,
+            fps,
+        }) = self.rain
+        {
+            items.push(alloc::format!(
+                "rain={intensity},{speed},{angle},{dim},{fps}"
+            ));
+        }
+        if items.is_empty() {
+            None
+        } else {
+            Some(items.join("+"))
+        }
+    }
+
+    #[must_use]
+    pub fn from_cache_str(s: &str) -> Self {
+        let mut effects = Self::default();
+        for item in s.split('+') {
+            let (name, values) = item.split_once('=').unwrap_or(("pz", item));
+            let mut values = values.split(',');
+            let mut next_f32 = || values.next()?.parse::<f32>().ok();
+            match name {
+                "pz" => {
+                    effects.pan_zoom = (|| {
+                        Some(PanZoom {
+                            zoom: next_f32()?,
+                            duration: next_f32()?,
+                            fps: next_f32()? as u16,
+                        })
+                    })();
+                }
+                "rain" => {
+                    effects.rain = (|| {
+                        Some(Rain {
+                            intensity: next_f32()?,
+                            speed: next_f32()?,
+                            angle: next_f32()?,
+                            dim: next_f32()?,
+                            fps: next_f32()? as u16,
+                        })
+                    })();
+                }
+                _ => (),
+            }
+        }
+        effects
     }
 }
 
@@ -734,7 +872,7 @@ impl Animation {
 
 pub struct ImageReq {
     pub transition: Transition,
-    pub pan_zoom: Option<PanZoom>,
+    pub effects: Effects,
     pub imgs: Vec<ImgReq>,
     pub outputs: Vec<Box<[MmappedStr]>>,
     pub animations: Option<Vec<Animation>>,
@@ -745,4 +883,44 @@ fn deserialize_boxed_str(bytes: &[u8]) -> Box<str> {
     core::str::from_utf8(&bytes[4..4 + size])
         .expect("received a non utf8 string from socket")
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effects_cache_round_trip() {
+        let effects = Effects {
+            pan_zoom: Some(PanZoom {
+                zoom: 1.2,
+                duration: 60.0,
+                fps: 30,
+            }),
+            rain: Some(Rain {
+                intensity: 1.5,
+                speed: 0.8,
+                angle: -10.0,
+                dim: 0.2,
+                fps: 40,
+            }),
+        };
+        let s = effects.to_cache_string().unwrap();
+        assert_eq!(Effects::from_cache_str(&s), effects);
+        assert_eq!(Effects::default().to_cache_string(), None);
+    }
+
+    #[test]
+    fn effects_cache_reads_legacy_pan_zoom() {
+        let effects = Effects::from_cache_str("1.2,60,30");
+        assert_eq!(
+            effects.pan_zoom,
+            Some(PanZoom {
+                zoom: 1.2,
+                duration: 60.0,
+                fps: 30
+            })
+        );
+        assert_eq!(effects.rain, None);
+    }
 }

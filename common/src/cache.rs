@@ -30,8 +30,8 @@ pub struct CacheEntry<'a> {
     pub resize: &'a str,
     pub crop_gravity: Option<&'a str>,
     pub filter: &'a str,
-    /// see [crate::ipc::PanZoom::to_cache_string]
-    pub pan_zoom: Option<&'a str>,
+    /// see [crate::ipc::Effects::to_cache_string]
+    pub effects: Option<&'a str>,
     pub img_path: &'a str,
 }
 
@@ -41,7 +41,7 @@ impl<'a> CacheEntry<'a> {
         resize: &'a str,
         crop_gravity: Option<&'a str>,
         filter: &'a str,
-        pan_zoom: Option<&'a str>,
+        effects: Option<&'a str>,
         img_path: &'a str,
     ) -> Self {
         Self {
@@ -49,7 +49,7 @@ impl<'a> CacheEntry<'a> {
             resize,
             crop_gravity,
             filter,
-            pan_zoom,
+            effects,
             img_path,
         }
     }
@@ -76,10 +76,10 @@ impl<'a> CacheEntry<'a> {
             let filter = str::from_utf8(filter).map_err(|_| err.clone())?;
             let img_path = str::from_utf8(img_path).map_err(|_| err)?;
 
-            // the resize field is stored as `resize[:crop_gravity][+pan_zoom]`. We use `+`
+            // the resize field is stored as `resize[:crop_gravity][+effects]`. We use `+`
             // because the daemon interpolates this into a `sh -c` command, and it is not special
             // to the shell
-            let (resize, pan_zoom) = resize
+            let (resize, effects) = resize
                 .split_once('+')
                 .map(|(a, b)| (a, Some(b)))
                 .unwrap_or((resize, None));
@@ -94,7 +94,7 @@ impl<'a> CacheEntry<'a> {
                 resize,
                 crop_gravity,
                 filter,
-                pan_zoom,
+                effects,
                 img_path,
             });
         }
@@ -122,7 +122,7 @@ impl<'a> CacheEntry<'a> {
             entry.resize = self.resize;
             entry.crop_gravity = self.crop_gravity;
             entry.filter = self.filter;
-            entry.pan_zoom = self.pan_zoom;
+            entry.effects = self.effects;
             entry.img_path = self.img_path;
         } else {
             entries.push(self);
@@ -136,21 +136,21 @@ impl<'a> CacheEntry<'a> {
                 resize,
                 crop_gravity,
                 filter,
-                pan_zoom,
+                effects,
                 img_path,
             } = entry;
             let crop_gravity_option = match crop_gravity {
                 Some(value) => format!(":{value}"),
                 None => "".to_string(),
             };
-            let pan_zoom_option = match pan_zoom {
+            let effects_option = match effects {
                 Some(value) => format!("+{value}"),
                 None => "".to_string(),
             };
             let entry_delimiter = if len == 0 { "" } else { "\0" };
             len += write_all(
                 &file,
-                format!("{entry_delimiter}{namespace}\0{resize}{crop_gravity_option}{pan_zoom_option}\0{filter}\0{img_path}").as_bytes(),
+                format!("{entry_delimiter}{namespace}\0{resize}{crop_gravity_option}{effects_option}\0{filter}\0{img_path}").as_bytes(),
             )?;
         }
 

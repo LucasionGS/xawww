@@ -1,6 +1,6 @@
 use common::{
     cache::{get_previous_image_cache, read_cache_file},
-    ipc::{BgImg, BgInfo, PanZoom, PixelFormat, Scale},
+    ipc::{BgImg, BgInfo, Effects, PanZoom, PixelFormat, Scale},
     log::{debug, error, warn},
 };
 use waybackend::{
@@ -14,6 +14,7 @@ use core::num::NonZeroI32;
 mod bump_pool;
 mod camera;
 mod cell;
+mod rain;
 
 use crate::output_info::OutputInfo;
 pub use cell::WallpaperCell;
@@ -28,6 +29,8 @@ use crate::{
 };
 use bump_pool::BumpPool;
 use camera::Camera;
+pub use rain::Globals;
+use rain::RainOverlay;
 
 struct FrameCallbackHandler {
     callback: Option<ObjectId>,
@@ -88,6 +91,7 @@ pub struct Wallpaper {
     /// Dimensions of the last buffer we attached to the surface. The viewport source rectangle
     /// must always be within it
     attached_dimensions: (i32, i32),
+    rain: Option<RainOverlay>,
 }
 
 impl Wallpaper {
@@ -199,6 +203,7 @@ impl Wallpaper {
             camera: None,
             viewport_source: None,
             attached_dimensions: (0, 0),
+            rain: None,
         }
     }
 
@@ -316,22 +321,17 @@ impl Wallpaper {
                             Some(v) => format!("--crop-gravity={v}"),
                             None => "".to_string(),
                         };
-                        let pan_zoom_parameters =
-                            match cache.pan_zoom.and_then(PanZoom::from_cache_str) {
-                                Some(p) => format!(
-                                    "--pan-zoom --pan-zoom-scale={} --pan-zoom-duration={} \
-                                    --pan-zoom-fps={}",
-                                    p.zoom, p.duration, p.fps
-                                ),
-                                None => "".to_string(),
-                            };
+                        let effects_parameters = cache
+                            .effects
+                            .map(|e| effects_cli_args(&Effects::from_cache_str(e)))
+                            .unwrap_or_default();
 
                         let cmd = format!(
                             "exec awww img \
                             --outputs='{output_name}' \
                             --resize={} \
                             {crop_gravity_parameters} \
-                            {pan_zoom_parameters} \
+                            {effects_parameters} \
                             --filter={} \
                             --namespace='{namespace}' \
                             --transition-type=none \
@@ -383,6 +383,11 @@ impl Wallpaper {
         let (w, h) = self.scale_factor.mul_dim(width, height);
         self.pool.resize(backend, w, h);
 
+        // its textures were made for the old size, and the animator driving it is being stopped
+        if let Some(rain) = self.rain.take() {
+            rain.destroy(backend);
+        }
+
         self.frame_callback_handler.callback = None;
 
         wl_surface::req::commit(backend, self.wl_surface).unwrap();
@@ -411,8 +416,11 @@ impl Wallpaper {
         backend: &mut Waybackend,
         buffer: ObjectId,
     ) -> bool {
-        self.pool
-            .set_buffer_release_flag(backend, buffer, self.clones > 0)
+        // the rain's buffers never change, so we do not care when they are released
+        self.rain.as_ref().is_some_and(|r| r.has_buffer(buffer))
+            || self
+                .pool
+                .set_buffer_release_flag(backend, buffer, self.clones > 0)
     }
 
     pub fn is_draw_ready(&self) -> bool {
@@ -440,10 +448,44 @@ impl Wallpaper {
         (self.pool.width() as u32, self.pool.height() as u32)
     }
 
-    /// Starts, updates or stops the pan and zoom effect.
+    /// Starts, updates or stops the effects.
     ///
+    /// Effects that are already running with compatible parameters continue smoothly from where
+    /// they were.
+    pub fn set_effects(
+        &mut self,
+        backend: &mut Waybackend,
+        objman: &mut ObjectManager<WaylandObject>,
+        globals: &Globals,
+        effects: Effects,
+    ) {
+        self.set_pan_zoom(effects.pan_zoom);
+
+        let screen = (self.width.get(), self.height.get());
+        let physical = self.scale_factor.mul_dim(screen.0, screen.1);
+        match (effects.rain, self.rain.as_ref()) {
+            (Some(rain), Some(overlay)) if overlay.matches(&rain, screen, physical) => (),
+            (rain, _) => {
+                if let Some(overlay) = self.rain.take() {
+                    overlay.destroy(backend);
+                }
+                self.rain = rain.and_then(|rain| {
+                    RainOverlay::new(
+                        backend,
+                        objman,
+                        globals,
+                        self.wl_surface,
+                        rain,
+                        screen,
+                        physical,
+                    )
+                });
+            }
+        }
+    }
+
     /// If the zoom level stays the same, the motion continues smoothly from where it was.
-    pub fn set_pan_zoom(&mut self, pan_zoom: Option<PanZoom>) {
+    fn set_pan_zoom(&mut self, pan_zoom: Option<PanZoom>) {
         match (pan_zoom, self.camera.as_mut()) {
             (Some(pz), Some(camera)) if camera.pan_zoom().zoom == pz.zoom => {
                 camera.set_pan_zoom(pz);
@@ -543,17 +585,20 @@ impl Wallpaper {
     ) {
         if let Some(camera) = self.camera.as_mut() {
             camera.advance(now);
+            self.apply_viewport_source(backend);
+            wl_surface::req::damage(
+                backend,
+                self.wl_surface,
+                0,
+                0,
+                self.width.get(),
+                self.height.get(),
+            )
+            .unwrap();
         }
-        self.apply_viewport_source(backend);
-        wl_surface::req::damage(
-            backend,
-            self.wl_surface,
-            0,
-            0,
-            self.width.get(),
-            self.height.get(),
-        )
-        .unwrap();
+        if let Some(rain) = self.rain.as_mut() {
+            rain.frame(backend, now);
+        }
         self.frame_callback_handler
             .request_frame_callback(backend, objman, self.wl_surface);
     }
@@ -602,6 +647,10 @@ impl Wallpaper {
     pub fn destroy(&mut self, backend: &mut Waybackend) {
         // Careful not to panic here, since we call this on drop
 
+        if let Some(rain) = self.rain.take() {
+            rain.destroy(backend);
+        }
+
         wp_viewport::req::destroy(backend, self.wp_viewport).unwrap();
         if let Some(fractional) = self.wp_fractional {
             wp_fractional_scale_v1::req::destroy(backend, fractional).unwrap();
@@ -628,10 +677,14 @@ impl Wallpaper {
         wl_surface::req::attach(backend, surface, Some(buf), 0, 0).unwrap();
         wl_surface::req::damage_buffer(backend, surface, 0, 0, width, height).unwrap();
         self.attached_dimensions = (width, height);
+        let now = crate::clock::get();
         if let Some(camera) = self.camera.as_mut() {
-            camera.advance(crate::clock::get());
+            camera.advance(now);
         }
         self.apply_viewport_source(backend);
+        if let Some(rain) = self.rain.as_mut() {
+            rain.frame(backend, now);
+        }
         self.frame_callback_handler
             .request_frame_callback(backend, objman, surface);
     }
@@ -650,7 +703,26 @@ pub fn attach_buffers_and_damage_surfaces(
     }
 }
 
-/// moves the camera of every wallpaper, without attaching new buffers
+/// Command line arguments for `awww img` that recreate these effects
+fn effects_cli_args(effects: &Effects) -> String {
+    let mut args = String::new();
+    if let Some(p) = effects.pan_zoom {
+        args += &format!(
+            " --pan-zoom --pan-zoom-scale={} --pan-zoom-duration={} --pan-zoom-fps={}",
+            p.zoom, p.duration, p.fps
+        );
+    }
+    if let Some(r) = effects.rain {
+        args += &format!(
+            " --rain --rain-intensity={} --rain-speed={} --rain-angle={} --rain-dim={} \
+            --rain-fps={}",
+            r.intensity, r.speed, r.angle, r.dim, r.fps
+        );
+    }
+    args
+}
+
+/// moves the camera and the rain of every wallpaper, without attaching new buffers
 pub fn viewport_frames(
     backend: &mut Waybackend,
     objman: &mut ObjectManager<WaylandObject>,
