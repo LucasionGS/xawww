@@ -70,6 +70,8 @@ pub struct BumpPool {
     width: i32,
     height: i32,
     last_used_buffer: u32,
+    /// whether `last_used_buffer` holds an image we drew with the current dimensions
+    content_valid: bool,
 }
 
 impl BumpPool {
@@ -94,6 +96,7 @@ impl BumpPool {
             width,
             height,
             last_used_buffer: 0,
+            content_valid: false,
         }
     }
 
@@ -209,11 +212,23 @@ impl BumpPool {
             self.last_used_buffer = i as u32;
         }
 
+        self.content_valid = true;
         unsafe {
             self.mmap
                 .slice_mut()
                 .get_unchecked_mut(offset..offset + len)
         }
+    }
+
+    /// The contents of the last buffer we have drawn to, if they are still valid
+    pub fn last_drawn(&mut self, pixel_format: PixelFormat) -> Option<&[u8]> {
+        if !self.content_valid {
+            return None;
+        }
+        let len = self.buffer_len(pixel_format);
+        let offset = self.buffer_offset(self.last_used_buffer as usize, pixel_format);
+        self.mmap.ensure_mapped();
+        self.mmap.slice().get(offset..offset + len)
     }
 
     /// gets the last buffer we've drawn to
@@ -237,6 +252,7 @@ impl BumpPool {
             self.width = width;
             self.height = height;
             self.last_used_buffer = 0;
+            self.content_valid = false;
         }
     }
 

@@ -163,6 +163,15 @@ impl Daemon {
                 for wallpaper in &wallpapers {
                     let mut wallpaper = wallpaper.borrow_mut();
                     wallpaper.set_img_info(common::ipc::BgImg::Color(clear.color));
+                    wallpaper.set_pan_zoom(None);
+                    let dim = wallpaper.get_dimensions();
+                    wallpaper.ensure_canvas_dimensions(
+                        &mut self.backend,
+                        &mut self.objman,
+                        self.pixel_format,
+                        dim,
+                        false,
+                    );
                     wallpaper.clear(
                         &mut self.backend,
                         &mut self.objman,
@@ -200,6 +209,7 @@ impl Daemon {
             RequestRecv::Query => Answer::Info(self.wallpapers_info()),
             RequestRecv::Img(ImageReq {
                 transition,
+                pan_zoom,
                 mut imgs,
                 mut outputs,
                 mut animations,
@@ -214,9 +224,16 @@ impl Daemon {
                     };
                     let wallpapers = self.find_wallpapers_by_names(&names);
                     self.stop_animations(&wallpapers);
-                    if let Some(mut animator) =
-                        Animator::new(wallpapers, &transition, img, animation)
-                    {
+                    if let Some(mut animator) = Animator::new(
+                        &mut self.backend,
+                        &mut self.objman,
+                        self.pixel_format,
+                        wallpapers,
+                        &transition,
+                        img,
+                        animation,
+                        pan_zoom,
+                    ) {
                         animator.frame(&mut self.backend, &mut self.objman, self.pixel_format);
                         self.animators.push(animator);
                     }
@@ -257,11 +274,9 @@ impl Daemon {
             tv_sec: 0,
             tv_nsec: 1_000_000,
         };
-        // If the wallpaper is fully covered, we may run into a situation where the compositor never
-        // sends us the frame event, and we always end up setting the timer to 0, thus resulting in
-        // a busy-loop. This is here to ensure some throtling in that specific case. Ideally, we
-        // would like for the specific value to be either configurable or match the display's
-        // refresh rate. In practice 10ms works well enough
+        // Minimum time between two frames of the same animator. Ideally, we would like for the
+        // specific value to be either configurable or match the display's refresh rate. In
+        // practice 10ms works well enough
         const FPS_LIMIT: Timespec = Timespec {
             tv_sec: 0,
             tv_nsec: 10_000_000,
@@ -287,18 +302,35 @@ impl Daemon {
                     sleep(time);
                 }
 
-                wallpaper::attach_buffers_and_damage_surfaces(
-                    &mut self.backend,
-                    &mut self.objman,
-                    &animator.wallpapers,
-                );
+                if animator.is_viewport_only() {
+                    wallpaper::viewport_frames(
+                        &mut self.backend,
+                        &mut self.objman,
+                        &animator.wallpapers,
+                    );
+                    wallpaper::commit_wallpapers(&mut self.backend, &animator.wallpapers);
+                    animator.updt_time();
+                } else {
+                    wallpaper::attach_buffers_and_damage_surfaces(
+                        &mut self.backend,
+                        &mut self.objman,
+                        &animator.wallpapers,
+                    );
 
-                wallpaper::commit_wallpapers(&mut self.backend, &animator.wallpapers);
-                animator.updt_time();
-                if animator.frame(&mut self.backend, &mut self.objman, self.pixel_format) {
-                    self.animators.swap_remove(i);
-                    continue;
+                    wallpaper::commit_wallpapers(&mut self.backend, &animator.wallpapers);
+                    animator.updt_time();
+                    if animator.frame(&mut self.backend, &mut self.objman, self.pixel_format) {
+                        self.animators.swap_remove(i);
+                        continue;
+                    }
                 }
+            } else {
+                // We cannot draw before the frame callback arrives, and its handler wakes us up,
+                // so there is no point in polling. If the wallpaper is covered, the compositor
+                // may never send it, and we stay completely idle instead of waking up every
+                // FPS_LIMIT.
+                i += 1;
+                continue;
             }
             let time = animator.time_to_draw();
             if time < FPS_LIMIT {
@@ -553,6 +585,14 @@ impl wayland::wl_callback::EvHandler for Daemon {
         for wallpaper in &self.wallpapers {
             if wallpaper.borrow().has_callback(sender_id) {
                 wallpaper.borrow_mut().frame_callback_completed();
+                // make sure `draw` runs, since animators waiting on a frame callback do not set
+                // up a timer
+                if !self.animators.is_empty() {
+                    self.set_poll_time(Timespec {
+                        tv_sec: 0,
+                        tv_nsec: 0,
+                    });
+                }
                 break;
             }
         }

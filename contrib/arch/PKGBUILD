@@ -1,0 +1,58 @@
+# Builds xawww from this checkout (including uncommitted changes) and installs it
+# in place of the `awww` package. The fork's client and daemon speak a different
+# protocol than upstream's, so they must always be installed together.
+#
+# Usage, from this directory:
+#   makepkg -si
+#
+# To go back to upstream: sudo pacman -S awww
+
+pkgname=xawww
+pkgver=0.12.1
+pkgrel=1
+pkgdesc="Fork of awww, the Wayland wallpaper daemon, with extra effects"
+arch=('x86_64')
+url="https://github.com/LucasionGS/xawww"
+license=('GPL-3.0-only')
+depends=('dav1d' 'glibc' 'libgcc' 'lz4')
+makedepends=('cargo' 'git' 'scdoc')
+provides=("awww=${pkgver%%.r*}")
+conflicts=('awww')
+options=('!debug' '!lto')
+
+_repo="$(realpath "$startdir/../..")"
+
+pkgver() {
+  cd "$_repo"
+  local version
+  version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+  printf "%s.r%s.g%s" "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  git diff --quiet HEAD || printf ".dirty"
+}
+
+build() {
+  cd "$_repo"
+  # separate target dir, so makepkg's flags don't invalidate the development build cache
+  export CARGO_TARGET_DIR="$srcdir/target"
+  cargo build --release --locked --features all-formats
+
+  mkdir -p "$srcdir/man"
+  for page in doc/*.scd; do
+    scdoc < "$page" > "$srcdir/man/$(basename "$page" .scd)"
+  done
+}
+
+package() {
+  cd "$_repo"
+  install -Dm755 "$srcdir/target/release/awww" "$pkgdir/usr/bin/awww"
+  install -Dm755 "$srcdir/target/release/awww-daemon" "$pkgdir/usr/bin/awww-daemon"
+
+  install -Dm644 completions/awww.bash "$pkgdir/usr/share/bash-completion/completions/awww"
+  install -Dm644 completions/_awww "$pkgdir/usr/share/zsh/site-functions/_awww"
+  install -Dm644 completions/awww.fish "$pkgdir/usr/share/fish/vendor_completions.d/awww.fish"
+  install -Dm644 completions/awww.elv "$pkgdir/usr/share/elvish/lib/awww.elv"
+
+  install -Dm644 -t "$pkgdir/usr/share/man/man1" "$srcdir"/man/*
+  install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname" README.md CHANGELOG.md
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

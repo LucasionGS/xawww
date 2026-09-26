@@ -288,7 +288,7 @@ impl Wave {
 
         for wallpaper in wallpapers.iter() {
             let mut wallpaper = wallpaper.borrow_mut();
-            let dim = wallpaper.get_dimensions();
+            let dim = wallpaper.canvas_dimensions();
             let width = dim.0 as usize;
             let height = dim.1 as usize;
             let stride = width * pixel_format.channels() as usize;
@@ -399,7 +399,7 @@ impl Grow {
 
         for wallpaper in wallpapers.iter() {
             let mut wallpaper = wallpaper.borrow_mut();
-            let dim = wallpaper.get_dimensions();
+            let dim = wallpaper.canvas_dimensions();
             let width = dim.0 as usize;
             let height = dim.1 as usize;
             let stride = width * pixel_format.channels() as usize;
@@ -483,7 +483,7 @@ impl Outer {
         let channels = pixel_format.channels() as usize;
         for wallpaper in wallpapers.iter() {
             let mut wallpaper = wallpaper.borrow_mut();
-            let dim = wallpaper.get_dimensions();
+            let dim = wallpaper.canvas_dimensions();
             let width = dim.0 as usize;
             let height = dim.1 as usize;
             let stride = width * pixel_format.channels() as usize;

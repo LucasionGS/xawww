@@ -506,6 +506,81 @@ impl Transition {
     }
 }
 
+/// A slow, continuous "Ken Burns" style pan and zoom over a static image.
+///
+/// The client renders the image `zoom` times larger than the output, and the daemon then only
+/// moves a `wp_viewport` source rectangle around inside it. The compositor does all of the
+/// scaling, so after the initial upload every frame is just a couple of tiny protocol messages.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PanZoom {
+    /// maximum zoom factor. Also how much larger than the output the image is rendered
+    pub zoom: f32,
+    /// seconds for a full zoom in -> zoom out cycle
+    pub duration: f32,
+    pub fps: u16,
+}
+
+impl PanZoom {
+    pub(super) const SERIALIZED_SIZE: usize = 11;
+
+    /// the dimensions of the canvas the image must be rendered to, given the output's real
+    /// dimensions
+    #[must_use]
+    pub fn canvas_dim(&self, dim: (u32, u32)) -> (u32, u32) {
+        let zoom = f64::from(self.zoom);
+        (
+            (f64::from(dim.0) * zoom + 0.5) as u32,
+            (f64::from(dim.1) * zoom + 0.5) as u32,
+        )
+    }
+
+    /// Format understood by [PanZoom::from_cache_str]
+    #[must_use]
+    pub fn to_cache_string(&self) -> String {
+        alloc::format!("{},{},{}", self.zoom, self.duration, self.fps)
+    }
+
+    #[must_use]
+    pub fn from_cache_str(s: &str) -> Option<Self> {
+        let mut iter = s.split(',');
+        let zoom = iter.next()?.parse().ok()?;
+        let duration = iter.next()?.parse().ok()?;
+        let fps = iter.next()?.parse().ok()?;
+        Some(Self {
+            zoom,
+            duration,
+            fps,
+        })
+    }
+
+    pub(super) fn serialize(pan_zoom: Option<&Self>, buf: &mut ImageRequestBuilder) {
+        match pan_zoom {
+            Some(Self {
+                zoom,
+                duration,
+                fps,
+            }) => {
+                buf.push_byte(1);
+                buf.extend(&zoom.to_ne_bytes());
+                buf.extend(&duration.to_ne_bytes());
+                buf.extend(&fps.to_ne_bytes());
+            }
+            None => buf.extend(&[0; Self::SERIALIZED_SIZE]),
+        }
+    }
+
+    pub(super) fn deserialize(bytes: &[u8]) -> Option<Self> {
+        if bytes[0] == 0 {
+            return None;
+        }
+        Some(Self {
+            zoom: f32::from_ne_bytes(bytes[1..5].try_into().unwrap()),
+            duration: f32::from_ne_bytes(bytes[5..9].try_into().unwrap()),
+            fps: u16::from_ne_bytes(bytes[9..11].try_into().unwrap()),
+        })
+    }
+}
+
 pub struct ClearSend {
     pub color: [u8; 4],
     pub outputs: Box<[String]>,
@@ -659,6 +734,7 @@ impl Animation {
 
 pub struct ImageReq {
     pub transition: Transition,
+    pub pan_zoom: Option<PanZoom>,
     pub imgs: Vec<ImgReq>,
     pub outputs: Vec<Box<[MmappedStr]>>,
     pub animations: Option<Vec<Animation>>,

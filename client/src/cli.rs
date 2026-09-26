@@ -636,6 +636,71 @@ pub struct Img {
     /// inverts the y position sent in 'transition_pos' flag
     #[arg(long, env = "INVERT_Y", default_value = "false")]
     pub invert_y: bool,
+
+    /// Slowly pan and zoom across the image (a "Ken Burns" effect).
+    ///
+    /// The image is rendered slightly larger than the screen once, and from then on the compositor
+    /// moves and scales it on the GPU, so this costs next to no CPU. It never upscales the image,
+    /// so it stays sharp. It pauses by itself while the wallpaper is covered.
+    ///
+    /// Ignored for animated images and solid colors.
+    #[arg(
+        long,
+        visible_alias = "ken-burns",
+        env = "AWWW_PAN_ZOOM",
+        default_value = "false"
+    )]
+    pub pan_zoom: bool,
+
+    /// Maximum zoom of the pan-zoom effect, between 1.01 and 2.
+    ///
+    /// This is also how much larger than the screen the image is kept in memory, so memory use
+    /// grows with its square.
+    #[arg(
+        long,
+        env = "AWWW_PAN_ZOOM_SCALE",
+        default_value = "1.2",
+        value_parser = parse_pan_zoom_scale
+    )]
+    pub pan_zoom_scale: f32,
+
+    /// Seconds for one full zoom in and zoom out cycle of the pan-zoom effect.
+    ///
+    /// The panning moves on slightly different cycles, so the motion takes a long time to repeat.
+    #[arg(
+        long,
+        env = "AWWW_PAN_ZOOM_DURATION",
+        default_value = "60",
+        value_parser = parse_positive
+    )]
+    pub pan_zoom_duration: f32,
+
+    /// Frame rate of the pan-zoom effect.
+    ///
+    /// The motion is slow, so low values still look smooth. Higher values make the compositor
+    /// redraw the screen more often.
+    #[arg(long, env = "AWWW_PAN_ZOOM_FPS", default_value = "30", value_parser = clap::value_parser!(u16).range(1..))]
+    pub pan_zoom_fps: u16,
+}
+
+fn parse_pan_zoom_scale(raw: &str) -> Result<f32, String> {
+    let scale = raw.parse::<f32>().map_err(|e| e.to_string())?;
+    if (1.01..=2.0).contains(&scale) {
+        Ok(scale)
+    } else {
+        Err(format!(
+            "pan-zoom scale must be between 1.01 and 2, found {scale}"
+        ))
+    }
+}
+
+fn parse_positive(raw: &str) -> Result<f32, String> {
+    let value = raw.parse::<f32>().map_err(|e| e.to_string())?;
+    if value > 0.0 {
+        Ok(value)
+    } else {
+        Err(format!("value must be greater than 0, found {value}"))
+    }
 }
 
 fn parse_wave(raw: &str) -> Result<(f32, f32), String> {

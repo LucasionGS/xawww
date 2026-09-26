@@ -1,13 +1,18 @@
 use common::{
     cache::{get_previous_image_cache, read_cache_file},
-    ipc::{BgImg, BgInfo, PixelFormat, Scale},
+    ipc::{BgImg, BgInfo, PanZoom, PixelFormat, Scale},
     log::{debug, error, warn},
 };
-use waybackend::{Waybackend, objman::ObjectManager, types::ObjectId};
+use waybackend::{
+    Waybackend,
+    objman::ObjectManager,
+    types::{ObjectId, WlFixed},
+};
 
 use core::num::NonZeroI32;
 
 mod bump_pool;
+mod camera;
 mod cell;
 
 use crate::output_info::OutputInfo;
@@ -22,6 +27,7 @@ use crate::{
     },
 };
 use bump_pool::BumpPool;
+use camera::Camera;
 
 struct FrameCallbackHandler {
     callback: Option<ObjectId>,
@@ -74,6 +80,14 @@ pub struct Wallpaper {
     frame_callback_handler: FrameCallbackHandler,
     img: BgImg,
     pool: BumpPool,
+
+    /// Pan and zoom effect. When set, the pool's buffers are larger than the output
+    camera: Option<Camera>,
+    /// Last source rectangle we sent to the viewport, in 1/256ths of a pixel. `None` means unset
+    viewport_source: Option<[i32; 4]>,
+    /// Dimensions of the last buffer we attached to the surface. The viewport source rectangle
+    /// must always be within it
+    attached_dimensions: (i32, i32),
 }
 
 impl Wallpaper {
@@ -182,6 +196,9 @@ impl Wallpaper {
             frame_callback_handler,
             img: BgImg::Color([0, 0, 0, 0]),
             pool,
+            camera: None,
+            viewport_source: None,
+            attached_dimensions: (0, 0),
         }
     }
 
@@ -299,12 +316,22 @@ impl Wallpaper {
                             Some(v) => format!("--crop-gravity={v}"),
                             None => "".to_string(),
                         };
+                        let pan_zoom_parameters =
+                            match cache.pan_zoom.and_then(PanZoom::from_cache_str) {
+                                Some(p) => format!(
+                                    "--pan-zoom --pan-zoom-scale={} --pan-zoom-duration={} \
+                                    --pan-zoom-fps={}",
+                                    p.zoom, p.duration, p.fps
+                                ),
+                                None => "".to_string(),
+                            };
 
                         let cmd = format!(
                             "exec awww img \
                             --outputs='{output_name}' \
                             --resize={} \
                             {crop_gravity_parameters} \
+                            {pan_zoom_parameters} \
                             --filter={} \
                             --namespace='{namespace}' \
                             --transition-type=none \
@@ -407,6 +434,130 @@ impl Wallpaper {
         (dim.0 as u32, dim.1 as u32)
     }
 
+    /// Dimensions of the buffers we draw to. This is larger than [Self::get_dimensions] when
+    /// the pan and zoom effect is active
+    pub fn canvas_dimensions(&self) -> (u32, u32) {
+        (self.pool.width() as u32, self.pool.height() as u32)
+    }
+
+    /// Starts, updates or stops the pan and zoom effect.
+    ///
+    /// If the zoom level stays the same, the motion continues smoothly from where it was.
+    pub fn set_pan_zoom(&mut self, pan_zoom: Option<PanZoom>) {
+        match (pan_zoom, self.camera.as_mut()) {
+            (Some(pz), Some(camera)) if camera.pan_zoom().zoom == pz.zoom => {
+                camera.set_pan_zoom(pz);
+            }
+            (Some(pz), _) => self.camera = Some(Camera::new(pz)),
+            (None, _) => self.camera = None,
+        }
+    }
+
+    /// Resizes the canvas, if necessary.
+    ///
+    /// When `preserve` is set, what is currently on screen is rescaled into the new canvas, so that
+    /// transitions start from the right image.
+    pub fn ensure_canvas_dimensions(
+        &mut self,
+        backend: &mut Waybackend,
+        objman: &mut ObjectManager<WaylandObject>,
+        pixel_format: PixelFormat,
+        dim: (u32, u32),
+        preserve: bool,
+    ) {
+        let (width, height) = (dim.0 as i32, dim.1 as i32);
+        let (old_width, old_height) = (self.pool.width(), self.pool.height());
+        if (width, height) == (old_width, old_height) {
+            return;
+        }
+        debug!(
+            "Output {} canvas: {old_width}x{old_height} -> {width}x{height}",
+            self.output_name
+        );
+
+        let visible = match self.viewport_source {
+            Some(rect) if self.attached_dimensions == (old_width, old_height) => rect,
+            _ => [0, 0, old_width * 256, old_height * 256],
+        };
+        let old = if preserve {
+            self.pool.last_drawn(pixel_format).map(<[u8]>::to_vec)
+        } else {
+            None
+        };
+
+        self.pool.resize(backend, width, height);
+        let channels = pixel_format.channels() as usize;
+        let canvas = self.pool.get_drawable(backend, objman, pixel_format);
+        match old {
+            Some(old) => resample_nearest(
+                &old,
+                old_width as usize,
+                visible,
+                canvas,
+                width as usize,
+                height as usize,
+                channels,
+            ),
+            None => {
+                canvas.fill(0);
+                if channels == 4 {
+                    canvas.iter_mut().skip(3).step_by(4).for_each(|a| *a = 255);
+                }
+            }
+        }
+    }
+
+    /// Sends the viewport source rectangle for the current camera position (or unsets it, if
+    /// there is no camera), if it changed
+    fn apply_viewport_source(&mut self, backend: &mut Waybackend) {
+        let (width, height) = self.attached_dimensions;
+        let rect = self
+            .camera
+            .as_ref()
+            .map(|camera| camera.source_rect(width, height));
+        if rect == self.viewport_source {
+            return;
+        }
+        let fixed = |v: i32| WlFixed::from(f64::from(v) / 256.0);
+        // -1 on everything unsets the source rectangle
+        let [x, y, w, h] = rect.unwrap_or([-256; 4]);
+        wp_viewport::req::set_source(
+            backend,
+            self.wp_viewport,
+            fixed(x),
+            fixed(y),
+            fixed(w),
+            fixed(h),
+        )
+        .unwrap();
+        self.viewport_source = rect;
+    }
+
+    /// Moves the camera without touching the buffer. This is the entire per-frame cost of the pan
+    /// and zoom effect: the compositor does all of the scaling.
+    fn viewport_frame(
+        &mut self,
+        backend: &mut Waybackend,
+        objman: &mut ObjectManager<WaylandObject>,
+        now: rustix::time::Timespec,
+    ) {
+        if let Some(camera) = self.camera.as_mut() {
+            camera.advance(now);
+        }
+        self.apply_viewport_source(backend);
+        wl_surface::req::damage(
+            backend,
+            self.wl_surface,
+            0,
+            0,
+            self.width.get(),
+            self.height.get(),
+        )
+        .unwrap();
+        self.frame_callback_handler
+            .request_frame_callback(backend, objman, self.wl_surface);
+    }
+
     pub fn canvas_change<F, T>(
         &mut self,
         backend: &mut Waybackend,
@@ -476,6 +627,11 @@ impl Wallpaper {
 
         wl_surface::req::attach(backend, surface, Some(buf), 0, 0).unwrap();
         wl_surface::req::damage_buffer(backend, surface, 0, 0, width, height).unwrap();
+        self.attached_dimensions = (width, height);
+        if let Some(camera) = self.camera.as_mut() {
+            camera.advance(crate::clock::get());
+        }
+        self.apply_viewport_source(backend);
         self.frame_callback_handler
             .request_frame_callback(backend, objman, surface);
     }
@@ -491,6 +647,45 @@ pub fn attach_buffers_and_damage_surfaces(
         wallpaper
             .borrow_mut()
             .attach_buffer_and_damage_surface(backend, objman);
+    }
+}
+
+/// moves the camera of every wallpaper, without attaching new buffers
+pub fn viewport_frames(
+    backend: &mut Waybackend,
+    objman: &mut ObjectManager<WaylandObject>,
+    wallpapers: &[WallpaperCell],
+) {
+    let now = crate::clock::get();
+    for wallpaper in wallpapers {
+        wallpaper.borrow_mut().viewport_frame(backend, objman, now);
+    }
+}
+
+/// Nearest neighbor resampling of the `src_rect` region (in 1/256ths of a pixel) of `src` onto the
+/// whole of `dst`. It is only used once when the canvas changes size, so it favors simplicity.
+fn resample_nearest(
+    src: &[u8],
+    src_width: usize,
+    src_rect: [i32; 4],
+    dst: &mut [u8],
+    dst_width: usize,
+    dst_height: usize,
+    channels: usize,
+) {
+    let [x, y, w, h] = src_rect.map(|v| v as usize);
+    let src_height = src.len() / (src_width * channels);
+    // pixel centers, in 1/256ths of a pixel
+    let columns: Vec<usize> = (0..dst_width)
+        .map(|i| ((x + (2 * i + 1) * w / (2 * dst_width)) >> 8).min(src_width - 1) * channels)
+        .collect();
+
+    for (j, dst_row) in dst.chunks_exact_mut(dst_width * channels).enumerate() {
+        let row = ((y + (2 * j + 1) * h / (2 * dst_height)) >> 8).min(src_height - 1);
+        let src_row = &src[row * src_width * channels..(row + 1) * src_width * channels];
+        for (dst_pixel, &col) in dst_row.chunks_exact_mut(channels).zip(&columns) {
+            dst_pixel.copy_from_slice(&src_row[col..col + channels]);
+        }
     }
 }
 

@@ -21,6 +21,11 @@ pub use error::*;
 pub use socket::*;
 pub use types::*;
 
+/// length of the serialized [Transition]
+const TRANSITION_LEN: usize = 51;
+/// transition + pan zoom + image count
+const IMG_REQUEST_HEADER_LEN: usize = TRANSITION_LEN + PanZoom::SERIALIZED_SIZE + 1;
+
 pub struct ImageRequestBuilder {
     memory: Mmap,
     len: usize,
@@ -30,7 +35,7 @@ pub struct ImageRequestBuilder {
 
 impl ImageRequestBuilder {
     #[inline]
-    pub fn new(transition: Transition) -> io::Result<Self> {
+    pub fn new(transition: Transition, pan_zoom: Option<&PanZoom>) -> io::Result<Self> {
         let memory = Mmap::create(1 << (20 + 3))?; // start with 8 MB
         let len = 0;
         let mut builder = Self {
@@ -40,9 +45,10 @@ impl ImageRequestBuilder {
             img_count_index: 0,
         };
         transition.serialize(&mut builder);
+        PanZoom::serialize(pan_zoom, &mut builder);
         builder.img_count_index = builder.len;
         builder.len += 1;
-        assert_eq!(builder.len, 52);
+        assert_eq!(builder.len, IMG_REQUEST_HEADER_LEN);
         Ok(builder)
     }
 
@@ -67,6 +73,7 @@ impl ImageRequestBuilder {
     }
 
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     pub fn push(
         &mut self,
         img: ImgSend,
@@ -75,6 +82,7 @@ impl ImageRequestBuilder {
         resize: &str,
         crop_gravity: Option<&str>,
         filter: &str,
+        pan_zoom: Option<&str>,
         outputs: &[String],
         animation: Option<Animation>,
     ) {
@@ -108,9 +116,15 @@ impl ImageRequestBuilder {
         if use_cache {
             // cache the request
             for output in outputs {
-                if let Err(e) =
-                    super::cache::CacheEntry::new(namespace, resize, crop_gravity, filter, path)
-                        .store(output)
+                if let Err(e) = super::cache::CacheEntry::new(
+                    namespace,
+                    resize,
+                    crop_gravity,
+                    filter,
+                    pan_zoom,
+                    path,
+                )
+                .store(output)
                 {
                     log::error!("failed to store cache: {e}");
                 }
@@ -171,6 +185,7 @@ impl ImageRequestBuilder {
                         prev_image_cache.resize,
                         prev_image_cache.crop_gravity,
                         prev_image_cache.filter,
+                        prev_image_cache.pan_zoom,
                         &img_path,
                     )
                     .store(&output)

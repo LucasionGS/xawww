@@ -206,7 +206,26 @@ fn make_img_request(
     update_cached_disconnected_outputs: bool,
 ) -> Result<Mmap, String> {
     let transition = make_transition(img);
-    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition)
+
+    #[cfg(feature = "jxl")]
+    if let CliImage::Path(_) = &img.image {
+        jxl_oxide::integration::register_image_decoding_hook();
+    }
+    let imgbuf = match &img.image {
+        CliImage::Path(img_path) => Some(ImgBuf::new(img_path)?),
+        CliImage::Color(_) => None,
+    };
+
+    let pan_zoom = make_pan_zoom(img, imgbuf.as_ref());
+    let pan_zoom_cache = pan_zoom.as_ref().map(ipc::PanZoom::to_cache_string);
+    let pan_zoom_cache = pan_zoom_cache.as_deref();
+    // with pan-zoom, the image is rendered larger than the output
+    let canvas_dim = |dim: (u32, u32)| match &pan_zoom {
+        Some(pan_zoom) => pan_zoom.canvas_dim(dim),
+        None => dim,
+    };
+
+    let mut img_req_builder = ipc::ImageRequestBuilder::new(transition, pan_zoom.as_ref())
         .map_err(|e| format!("failed to create ImageRequestBuilder: {e}"))?;
 
     let use_cache = !img.no_cache;
@@ -240,15 +259,15 @@ fn make_img_request(
                     resize,
                     crop_gravity_str,
                     filter,
+                    None,
                     outputs,
                     None,
                 );
             }
         }
         CliImage::Path(img_path) => {
-            #[cfg(feature = "jxl")]
-            jxl_oxide::integration::register_image_decoding_hook();
-            let imgbuf = ImgBuf::new(img_path)?;
+            // we always create it for paths, above
+            let imgbuf = imgbuf.as_ref().unwrap();
             match imgbuf.decode_prepare() {
                 DecodeBuffer::RasterImage(imgbuf) => {
                     let img_raw = imgbuf.decode(pixel_format)?;
@@ -267,6 +286,7 @@ fn make_img_request(
                     cache_path = path.clone();
 
                     for (&dim, outputs) in dims.iter().zip(outputs) {
+                        let dim = canvas_dim(dim);
                         let animation = if imgbuf.is_animated() {
                             match cache::load_animation_frames(
                                 &path.clone(),
@@ -332,6 +352,7 @@ fn make_img_request(
                             resize,
                             crop_gravity_str,
                             filter,
+                            pan_zoom_cache,
                             outputs,
                             animation,
                         );
@@ -354,6 +375,7 @@ fn make_img_request(
                     cache_path = path.clone();
 
                     for (&dim, outputs) in dims.iter().zip(outputs) {
+                        let dim = canvas_dim(dim);
                         let filter = img.filter.as_str();
                         let img_raw = imgbuf.decode(pixel_format, dim.0, dim.1)?;
                         let img = match img.resize {
@@ -386,6 +408,7 @@ fn make_img_request(
                             resize,
                             crop_gravity_str,
                             filter,
+                            pan_zoom_cache,
                             outputs,
                             None,
                         );
@@ -400,6 +423,25 @@ fn make_img_request(
     }
 
     Ok(img_req_builder.build())
+}
+
+fn make_pan_zoom(img: &cli::Img, imgbuf: Option<&ImgBuf>) -> Option<ipc::PanZoom> {
+    if !img.pan_zoom {
+        return None;
+    }
+    match imgbuf {
+        None => return None,
+        Some(imgbuf) if imgbuf.is_animated() => {
+            eprintln!("WARNING: pan-zoom is not supported for animated images. Ignoring it.");
+            return None;
+        }
+        Some(_) => (),
+    }
+    Some(ipc::PanZoom {
+        zoom: img.pan_zoom_scale,
+        duration: img.pan_zoom_duration,
+        fps: img.pan_zoom_fps,
+    })
 }
 
 #[allow(clippy::type_complexity)]
@@ -484,6 +526,7 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
     let crop_gravity = cache
         .crop_gravity
         .map(|v| CropGravity::from_str(v).unwrap_or_default());
+    let pan_zoom = cache.pan_zoom.and_then(ipc::PanZoom::from_cache_str);
 
     process_awww_args(
         &Awww::Img(cli::Img {
@@ -510,6 +553,10 @@ fn restore_output(output: &str, namespace: &str) -> Result<(), String> {
             invert_y: false,
             transition_bezier: (0.0, 0.0, 0.0, 0.0),
             transition_wave: (0.0, 0.0),
+            pan_zoom: pan_zoom.is_some(),
+            pan_zoom_scale: pan_zoom.map_or(1.2, |p| p.zoom),
+            pan_zoom_duration: pan_zoom.map_or(60.0, |p| p.duration),
+            pan_zoom_fps: pan_zoom.map_or(30, |p| p.fps),
         }),
         namespace,
     )?;

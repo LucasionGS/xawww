@@ -239,6 +239,43 @@ awww-img
 
 	Default is : 20,20
 
+*--pan-zoom*, *--ken-burns*
+	\[Environment Variable: AWWW_PAN_ZOOM]
+
+	Slowly pan and zoom across the image (a "Ken Burns" effect).
+
+	The image is rendered slightly larger than the screen once, and from then
+	on the compositor moves and scales it on the GPU, so this costs next to no
+	CPU. It never upscales the image, so it stays sharp. It pauses by itself
+	while the wallpaper is covered.
+
+	Ignored for animated images and solid colors.
+
+*--pan-zoom-scale* <1.01-2>
+	\[Environment Variable: AWWW_PAN_ZOOM_SCALE]
+
+	Maximum zoom of the pan-zoom effect. This is also how much larger than the
+	screen the image is kept in memory, so memory use grows with its square.
+
+	Default is 1.2
+
+*--pan-zoom-duration* <seconds (can have decimals)>
+	\[Environment Variable: AWWW_PAN_ZOOM_DURATION]
+
+	Seconds for one full zoom in and zoom out cycle of the pan-zoom effect.
+	The panning moves on slightly different cycles, so the motion takes a long
+	time to repeat.
+
+	Default is 60
+
+*--pan-zoom-fps* <frames per second>
+	\[Environment Variable: AWWW_PAN_ZOOM_FPS]
+
+	Frame rate of the pan-zoom effect. The motion is slow, so low values still
+	look smooth. Higher values make the compositor redraw the screen more often.
+
+	Default is 30
+
 *-h*, *--help*
 	Print help (see a summary with '-h')
 

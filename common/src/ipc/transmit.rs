@@ -18,6 +18,7 @@ use super::ImgReq;
 use super::IpcError;
 use super::IpcErrorKind;
 use super::IpcSocket;
+use super::PanZoom;
 use super::RequestRecv;
 use super::RequestSend;
 use super::Transition;
@@ -111,13 +112,14 @@ impl From<RawMsg> for RequestRecv {
                 let mmap = value.shm.unwrap();
                 let bytes = mmap.slice();
                 let transition = Transition::deserialize(&bytes[0..]);
-                let len = bytes[51] as usize;
+                let pan_zoom = PanZoom::deserialize(&bytes[super::TRANSITION_LEN..]);
+                let len = bytes[super::IMG_REQUEST_HEADER_LEN - 1] as usize;
 
                 let mut imgs = Vec::with_capacity(len);
                 let mut outputs = Vec::with_capacity(len);
                 let mut animations = Vec::with_capacity(len);
 
-                let mut i = 52;
+                let mut i = super::IMG_REQUEST_HEADER_LEN;
                 for _ in 0..len {
                     let (img, offset) = ImgReq::deserialize(&mmap, &bytes[i..]);
                     i += offset;
@@ -144,6 +146,7 @@ impl From<RawMsg> for RequestRecv {
 
                 Self::Img(ImageReq {
                     transition,
+                    pan_zoom,
                     imgs,
                     outputs,
                     animations: if animations.is_empty() {

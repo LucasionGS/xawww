@@ -6,7 +6,7 @@ use rustix::time::Timespec;
 
 use common::{
     compression::Decompressor,
-    ipc::{self, BgImg, ImgReq, Nanos, PixelFormat},
+    ipc::{self, BgImg, ImgReq, Nanos, PanZoom, PixelFormat},
     mmap::MmappedBytes,
 };
 
@@ -25,24 +25,34 @@ pub struct Animator {
 enum AnimatorKind {
     Transition(Transition),
     Animation(Animation),
+    /// Only moves the viewport. Never touches the buffers.
+    PanZoom(Nanos),
 }
 
 impl Animator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        backend: &mut Waybackend,
+        objman: &mut ObjectManager<WaylandObject>,
+        pixel_format: PixelFormat,
         mut wallpapers: SmallVec<[WallpaperCell; 2]>,
         transition: &ipc::Transition,
         img_req: ImgReq,
         animation: Option<ipc::Animation>,
+        pan_zoom: Option<PanZoom>,
     ) -> Option<Self> {
         let ImgReq { img, path, dim, .. } = img_req;
         if wallpapers.is_empty() {
             return None;
         }
-        for w in &mut wallpapers {
-            w.borrow_mut().set_img_info(BgImg::Img(path.str().into()));
-        }
+        // we cannot move the viewport over an image whose contents keep changing
+        let pan_zoom = pan_zoom.filter(|_| animation.is_none());
 
-        let expect = wallpapers[0].borrow().get_dimensions();
+        let real_dim = wallpapers[0].borrow().get_dimensions();
+        let expect = match &pan_zoom {
+            Some(pan_zoom) => pan_zoom.canvas_dim(real_dim),
+            None => real_dim,
+        };
         if dim != expect {
             error!(
                 "image has wrong dimensions! Expect {}x{}, actual {}x{}",
@@ -50,15 +60,24 @@ impl Animator {
             );
             return None;
         }
+
+        for w in &mut wallpapers {
+            let mut w = w.borrow_mut();
+            w.set_img_info(BgImg::Img(path.str().into()));
+            w.ensure_canvas_dimensions(backend, objman, pixel_format, dim, true);
+            w.set_pan_zoom(pan_zoom);
+        }
+
         let effect = Some(Box::new(Effect::new(transition, dim)));
         Some(Self {
             wallpapers,
             now: crate::clock::get(),
             animator: AnimatorKind::Transition(Transition {
                 effect,
-                fps_nanos: Nanos::from_nanos(1_000_000_000 / transition.fps as u64),
+                fps_nanos: Nanos::from_nanos(1_000_000_000 / transition.fps.max(1) as u64),
                 img,
                 animation,
+                pan_zoom,
             }),
         })
     }
@@ -67,7 +86,16 @@ impl Animator {
         match &self.animator {
             AnimatorKind::Transition(transition) => transition.time_to_draw(&self.now),
             AnimatorKind::Animation(animation) => animation.time_to_draw(&self.now),
+            AnimatorKind::PanZoom(fps_nanos) => {
+                let elapsed = crate::clock::get() - self.now;
+                timespec_saturating_sub(fps_nanos.into_timespec(), elapsed)
+            }
         }
+    }
+
+    /// Whether this animator only moves the viewport, never drawing new buffers
+    pub fn is_viewport_only(&self) -> bool {
+        matches!(self.animator, AnimatorKind::PanZoom(_))
     }
 
     pub fn updt_time(&mut self) {
@@ -102,12 +130,19 @@ impl Animator {
                     });
                     return false;
                 }
+                if let Some(pan_zoom) = transition.pan_zoom {
+                    *animator = AnimatorKind::PanZoom(Nanos::from_nanos(
+                        1_000_000_000 / pan_zoom.fps.max(1) as u64,
+                    ));
+                    return false;
+                }
                 true
             }
             AnimatorKind::Animation(animation) => {
                 animation.frame(backend, objman, wallpapers, pixel_format);
                 false
             }
+            AnimatorKind::PanZoom(_) => false,
         }
     }
 }
@@ -117,6 +152,7 @@ struct Transition {
     effect: Option<Box<Effect>>,
     img: MmappedBytes,
     animation: Option<ipc::Animation>,
+    pan_zoom: Option<PanZoom>,
 }
 
 impl Transition {
